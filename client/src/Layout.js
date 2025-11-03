@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 
-function Layout({ onLogout, userEmail }) {
+function Layout({ onLogout, userEmail, selectedProfile, onSwitchProfile, isBusinessProfile }) {
     const location = useLocation(); 
 
     const getLinkClass = (path) => {
@@ -17,7 +17,7 @@ function Layout({ onLogout, userEmail }) {
         <div className="flex h-screen w-full">
             {/* Sidebar */}
             <aside className="flex w-64 flex-col border-r border-border-light dark:border-border-dark bg-card-light dark:bg-card-dark p-4">
-                <div className="flex items-center gap-3 px-3 py-2">
+                <div className="flex items-center gap-3 px-3 py-2 mb-4">
                     <div className="text-primary size-8 flex items-center justify-center">
                         <svg fill="currentColor" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
                             <path clipRule="evenodd" d="M24 4H6V17.3333V30.6667H24V44H42V30.6667V17.3333H24V4Z" fillRule="evenodd"></path>
@@ -25,8 +25,27 @@ function Layout({ onLogout, userEmail }) {
                     </div>
                     <h1 className="text-text-light dark:text-text-dark text-lg font-bold">FinTrack</h1>
                 </div>
+
+                {/* Profile Indicator */}
+                <div className="mb-4 p-3 bg-background-light dark:bg-background-dark rounded-lg border border-border-light dark:border-border-dark">
+                    <div className="flex items-center gap-2 mb-2">
+                        <span className="material-symbols-outlined text-primary text-sm">
+                            {isBusinessProfile ? 'business' : 'person'}
+                        </span>
+                        <span className="text-text-light dark:text-text-dark text-sm font-semibold truncate">
+                            {selectedProfile.profile_name}
+                        </span>
+                    </div>
+                    <button
+                        onClick={onSwitchProfile}
+                        className="w-full text-xs text-primary hover:text-primary/80 transition-colors text-left flex items-center gap-1"
+                    >
+                        <span className="material-symbols-outlined text-sm">swap_horiz</span>
+                        Switch Profile
+                    </button>
+                </div>
                 
-                <div className="flex h-full flex-col justify-between mt-8">
+                <div className="flex h-full flex-col justify-between">
                     <nav className="flex flex-col gap-2">
                         <Link to="/dashboard" className={getLinkClass('/dashboard')}>
                             <span className="material-symbols-outlined">dashboard</span>
@@ -56,10 +75,21 @@ function Layout({ onLogout, userEmail }) {
                             <span className="material-symbols-outlined">repeat</span>
                             <p className="text-sm font-medium">Recurring</p>
                         </Link>
-                        <Link to="/profile/create" className={getLinkClass('/profile/create')}>
-                            <span className="material-symbols-outlined">person_add</span>
-                            <p className="text-sm font-medium">New Profile</p>
-                        </Link>
+                        
+                        {/* Business-only routes */}
+                        {isBusinessProfile && (
+                            <>
+                                <div className="h-px bg-border-light dark:bg-border-dark my-2"></div>
+                                <Link to="/invoices" className={getLinkClass('/invoices')}>
+                                    <span className="material-symbols-outlined">description</span>
+                                    <p className="text-sm font-medium">Invoices</p>
+                                </Link>
+                                <Link to="/clients" className={getLinkClass('/clients')}>
+                                    <span className="material-symbols-outlined">groups</span>
+                                    <p className="text-sm font-medium">Clients</p>
+                                </Link>
+                            </>
+                        )}
                     </nav>
                     
                     <div className="flex flex-col gap-1">
@@ -88,7 +118,7 @@ function Layout({ onLogout, userEmail }) {
                 {/* TopNavBar */}
                 <header className="flex items-center justify-between whitespace-nowrap border-b border-border-light dark:border-border-dark px-10 py-3 bg-card-light dark:bg-card-dark sticky top-0 z-10">
                     <h2 className="text-text-light dark:text-text-dark text-lg font-bold">
-                        Welcome, {userEmail ? userEmail.split('@')[0].split('.')[0].charAt(0).toUpperCase() + userEmail.split('@')[0].split('.')[0].slice(1) : 'User'}!
+                        {selectedProfile.profile_name}
                     </h2>
                     <div className="flex flex-1 justify-end items-center gap-6">
                         <div className="bg-gradient-to-br from-primary to-primary/60 aspect-square rounded-full size-10 flex items-center justify-center">
