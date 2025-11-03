@@ -1,0 +1,107 @@
+import React from 'react';
+import { Link, Outlet, useLocation } from 'react-router-dom';
+
+function Layout({ onLogout, userEmail }) {
+    const location = useLocation(); 
+
+    const getLinkClass = (path) => {
+        const isActive = location.pathname === path || 
+                        (path !== '/dashboard' && location.pathname.startsWith(path));
+        
+        return isActive 
+            ? "flex items-center gap-3 px-3 py-2 rounded-lg bg-primary/20 text-primary"
+            : "flex items-center gap-3 px-3 py-2 text-text-muted-light dark:text-text-muted-dark hover:bg-primary/20 hover:text-primary rounded-lg transition-colors";
+    };
+
+    return (
+        <div className="flex h-screen w-full">
+            {/* Sidebar */}
+            <aside className="flex w-64 flex-col border-r border-border-light dark:border-border-dark bg-card-light dark:bg-card-dark p-4">
+                <div className="flex items-center gap-3 px-3 py-2">
+                    <div className="text-primary size-8 flex items-center justify-center">
+                        <svg fill="currentColor" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
+                            <path clipRule="evenodd" d="M24 4H6V17.3333V30.6667H24V44H42V30.6667V17.3333H24V4Z" fillRule="evenodd"></path>
+                        </svg>
+                    </div>
+                    <h1 className="text-text-light dark:text-text-dark text-lg font-bold">FinTrack</h1>
+                </div>
+                
+                <div className="flex h-full flex-col justify-between mt-8">
+                    <nav className="flex flex-col gap-2">
+                        <Link to="/dashboard" className={getLinkClass('/dashboard')}>
+                            <span className="material-symbols-outlined">dashboard</span>
+                            <p className="text-sm font-medium">Dashboard</p>
+                        </Link>
+                        <Link to="/accounts" className={getLinkClass('/accounts')}>
+                            <span className="material-symbols-outlined">account_balance_wallet</span>
+                            <p className="text-sm font-medium">Accounts</p>
+                        </Link>
+                        <Link to="/categories" className={getLinkClass('/categories')}>
+                            <span className="material-symbols-outlined">receipt_long</span>
+                            <p className="text-sm font-medium">Categories</p>
+                        </Link>
+                        <Link to="/budgets" className={getLinkClass('/budgets')}>
+                            <span className="material-symbols-outlined">donut_small</span>
+                            <p className="text-sm font-medium">Budgets</p>
+                        </Link>
+                        <Link to="/goals" className={getLinkClass('/goals')}>
+                            <span className="material-symbols-outlined">bar_chart</span>
+                            <p className="text-sm font-medium">Goals</p>
+                        </Link>
+                        <Link to="/investments" className={getLinkClass('/investments')}>
+                            <span className="material-symbols-outlined">trending_up</span>
+                            <p className="text-sm font-medium">Investments</p>
+                        </Link>
+                        <Link to="/recurring" className={getLinkClass('/recurring')}>
+                            <span className="material-symbols-outlined">repeat</span>
+                            <p className="text-sm font-medium">Recurring</p>
+                        </Link>
+                        <Link to="/profile/create" className={getLinkClass('/profile/create')}>
+                            <span className="material-symbols-outlined">person_add</span>
+                            <p className="text-sm font-medium">New Profile</p>
+                        </Link>
+                    </nav>
+                    
+                    <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-3 px-3 py-2 text-text-muted-light dark:text-text-muted-dark">
+                            <div className="bg-gradient-to-br from-primary to-primary/60 aspect-square rounded-full size-10 flex items-center justify-center">
+                                <span className="text-white text-lg font-bold">
+                                    {userEmail ? userEmail.charAt(0).toUpperCase() : 'U'}
+                                </span>
+                            </div>
+                            <div className="flex flex-col">
+                                <h1 className="text-text-light dark:text-text-dark text-sm font-medium leading-tight truncate max-w-[120px]">
+                                    {userEmail || 'User'}
+                                </h1>
+                            </div>
+                        </div>
+                        <button onClick={onLogout} className="flex items-center gap-3 px-3 py-2 text-text-muted-light dark:text-text-muted-dark hover:bg-primary/20 hover:text-primary rounded-lg transition-colors w-full">
+                            <span className="material-symbols-outlined">logout</span>
+                            <p className="text-sm font-medium">Logout</p>
+                        </button>
+                    </div>
+                </div>
+            </aside>
+
+            {/* Main Content */}
+            <main className="flex-1 flex flex-col overflow-y-auto">
+                {/* TopNavBar */}
+                <header className="flex items-center justify-between whitespace-nowrap border-b border-border-light dark:border-border-dark px-10 py-3 bg-card-light dark:bg-card-dark sticky top-0 z-10">
+                    <h2 className="text-text-light dark:text-text-dark text-lg font-bold">
+                        Welcome, {userEmail ? userEmail.split('@')[0].split('.')[0].charAt(0).toUpperCase() + userEmail.split('@')[0].split('.')[0].slice(1) : 'User'}!
+                    </h2>
+                    <div className="flex flex-1 justify-end items-center gap-6">
+                        <div className="bg-gradient-to-br from-primary to-primary/60 aspect-square rounded-full size-10 flex items-center justify-center">
+                            <span className="text-white text-base font-bold">
+                                {userEmail ? userEmail.charAt(0).toUpperCase() : 'U'}
+                            </span>
+                        </div>
+                    </div>
+                </header>
+                <Outlet />
+            </main>
+        </div>
+    );
+}
+
+export default Layout;

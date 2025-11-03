@@ -1,0 +1,17 @@
+Dependencies
+This folder is enormous and can be recreated by running npm install
+/node_modules
+
+Environment Variables
+NEVER commit this file! It contains your secret database password.
+.env
+
+Logs
+Log files that may be generated during development or by npm
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+Operating System Files
+.DS_Store
+Thumbs.db

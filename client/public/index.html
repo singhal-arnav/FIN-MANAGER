@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#4A90E2" />
+    <meta
+      name="description"
+      content="FinTrack - Your Personal Finance Management Dashboard"
+    />
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    
+    <!-- Google Fonts - Manrope -->
+    <link href="https://fonts.googleapis.com" rel="preconnect" />
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&display=swap" rel="stylesheet" />
+    
+    <!-- Material Symbols -->
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
+    
+    <!-- Tailwind Config -->
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#4A90E2",
+              "positive": "#50E3C2",
+              "negative": "#E35050",
+              "background-light": "#F4F7FA",
+              "background-dark": "#101922",
+              "card-light": "#FFFFFF",
+              "card-dark": "#192734",
+              "text-light": "#333333",
+              "text-dark": "#E0E6ED",
+              "text-muted-light": "#617589",
+              "text-muted-dark": "#A0B3C6",
+              "border-light": "#E0E6ED",
+              "border-dark": "#2C3E50",
+            },
+            fontFamily: {
+              "display": ["Manrope", "sans-serif"]
+            },
+            borderRadius: {
+              "DEFAULT": "0.25rem",
+              "lg": "0.5rem",
+              "xl": "0.75rem",
+              "full": "9999px"
+            }
+          }
+        }
+      }
+    </script>
+    
+    <title>FinTrack - Personal Finance Dashboard</title>
+  </head>
+  <body class="font-display bg-background-light dark:bg-background-dark">
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+  </body>
+</html>
