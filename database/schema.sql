@@ -138,11 +138,13 @@ CREATE TABLE Investments (
 CREATE TABLE Investment_Transactions (
     inv_transaction_id  INT             PRIMARY KEY AUTO_INCREMENT,
     investment_id       INT             NOT NULL,
+    account_id          INT             NOT NULL,
     transaction_type    ENUM('Buy', 'Sell') NOT NULL,
     quantity            DECIMAL(18, 8)  NOT NULL,
     price_per_unit      DECIMAL(15, 2)  NOT NULL,
     transaction_date    DATE            NOT NULL,
-    FOREIGN KEY (investment_id) REFERENCES Investments(investment_id) ON DELETE CASCADE
+    FOREIGN KEY (investment_id) REFERENCES Investments(investment_id) ON DELETE CASCADE,
+    FOREIGN KEY (account_id) REFERENCES Accounts(account_id) ON DELETE CASCADE
 );
 
 -- =============================================

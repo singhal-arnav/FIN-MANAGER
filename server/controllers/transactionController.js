@@ -77,6 +77,7 @@ const getTransactionsByProfile = async (req, res) => {
 
 const createTransaction = async (req, res) => {
     try {
+        console.log('=== createTransaction called ===', { body: req.body });
         const { account_id, type, amount, description, category_id, payment_method_id } = req.body;
 
         if (!account_id || !type || !amount || !category_id || !payment_method_id) {
@@ -103,7 +104,48 @@ const createTransaction = async (req, res) => {
             return res.status(400).json({ message: 'Invalid transaction type' });
         }
 
-        await db.query('UPDATE Accounts SET balance = ? WHERE account_id = ?', [newBalance, account_id]);
+        // Validate newBalance
+        if (isNaN(newBalance) || !isFinite(newBalance)) {
+            console.error('Invalid balance calculation:', { accountBalance: account.balance, amount, type, newBalance });
+            return res.status(400).json({ message: 'Invalid balance calculation' });
+        }
+
+        console.log('Updating account balance:', { account_id, currentBalance: account.balance, amount, type, newBalance });
+
+        // Update account balance
+        const updateQueryResult = await db.query('UPDATE Accounts SET balance = ? WHERE account_id = ?', [newBalance, account_id]);
+        const updateResult = updateQueryResult[0];
+        
+        console.log('Update query result:', JSON.stringify(updateQueryResult, null, 2));
+        console.log('Update result:', { updateResult, affectedRows: updateResult?.affectedRows, changedRows: updateResult?.changedRows });
+        
+        // Verify the update succeeded
+        if (!updateResult || updateResult.affectedRows === 0) {
+            console.error('Failed to update account balance:', { account_id, newBalance, updateResult, fullResult: updateQueryResult });
+            return res.status(500).json({ message: 'Failed to update account balance' });
+        }
+
+        // Verify the balance was actually updated by fetching the account
+        const [updatedAccounts] = await db.query('SELECT balance FROM Accounts WHERE account_id = ?', [account_id]);
+        const actualBalance = parseFloat(updatedAccounts[0]?.balance || 0);
+        const expectedBalance = parseFloat(newBalance);
+        console.log('Account balance after update:', { 
+            account_id, 
+            actualBalance, 
+            expectedBalance,
+            difference: Math.abs(actualBalance - expectedBalance)
+        });
+        
+        // Allow for small floating point differences (0.01)
+        if (updatedAccounts.length === 0 || Math.abs(actualBalance - expectedBalance) > 0.01) {
+            console.error('Balance update verification failed:', { 
+                account_id, 
+                expected: expectedBalance, 
+                actual: actualBalance,
+                difference: Math.abs(actualBalance - expectedBalance)
+            });
+            return res.status(500).json({ message: 'Balance update verification failed' });
+        }
 
         const [newTransaction] = await db.query(
             'INSERT INTO Transactions (account_id, type, amount, description, category_id, payment_method_id) VALUES (?, ?, ?, ?, ?, ?)',
@@ -193,7 +235,18 @@ const deleteTransaction = async (req, res) => {
             reversedBalance = parseFloat(account.balance) + parseFloat(transaction.amount);
         }
 
-        await db.query('UPDATE Accounts SET balance = ? WHERE account_id = ?', [reversedBalance, transaction.account_id]);
+        // Validate reversedBalance
+        if (isNaN(reversedBalance) || !isFinite(reversedBalance)) {
+            return res.status(400).json({ message: 'Invalid balance calculation' });
+        }
+
+        // Update account balance
+        const [updateResult] = await db.query('UPDATE Accounts SET balance = ? WHERE account_id = ?', [reversedBalance, transaction.account_id]);
+        
+        // Verify the update succeeded
+        if (updateResult.affectedRows === 0) {
+            return res.status(500).json({ message: 'Failed to update account balance' });
+        }
 
         await db.query('DELETE FROM Transactions WHERE transaction_id = ?', [transactionId]);
         

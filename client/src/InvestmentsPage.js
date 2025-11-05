@@ -6,6 +6,7 @@ const API_URL = 'http://localhost:5000/api';
 function InvestmentsPage({ selectedProfile }) {
     const [investments, setInvestments] = useState([]);
     const [transactions, setTransactions] = useState([]);
+    const [accounts, setAccounts] = useState([]);
     
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -19,6 +20,7 @@ function InvestmentsPage({ selectedProfile }) {
 
     // Form state (New Transaction)
     const [txType, setTxType] = useState('Buy');
+    const [txAccountId, setTxAccountId] = useState('');
     const [quantity, setQuantity] = useState('');
     const [price, setPrice] = useState('');
     const [txDate, setTxDate] = useState('');
@@ -45,6 +47,18 @@ function InvestmentsPage({ selectedProfile }) {
         }
     }, [setLoading, setError, setTransactions]); 
 
+
+    // --- Fetch Accounts ---
+    const fetchAccounts = useCallback(async (profileId, token) => {
+        if (!profileId) return;
+        try {
+            const authHeaders = { headers: { 'Authorization': `Bearer ${token || localStorage.getItem('token')}` } };
+            const accountsRes = await axios.get(`${API_URL}/accounts/profile/${profileId}`, authHeaders);
+            setAccounts(accountsRes.data || []);
+        } catch (err) {
+            console.error('Failed to fetch accounts:', err);
+        }
+    }, []);
 
     // --- Fetch Investments (Shared Logic - Memoized) ---
     const fetchInvestments = useCallback(async (profileId, token) => {
@@ -89,6 +103,7 @@ function InvestmentsPage({ selectedProfile }) {
                 setLoading(true);
                 const token = localStorage.getItem('token');
                 fetchInvestments(selectedProfile.profile_id, token);
+                fetchAccounts(selectedProfile.profile_id, token);
             } catch (err) {
                 setError('Failed to fetch initial data.');
                 setLoading(false);
@@ -96,7 +111,7 @@ function InvestmentsPage({ selectedProfile }) {
         };
 
         fetchInitialData();
-    }, [selectedProfile, fetchInvestments]);
+    }, [selectedProfile, fetchInvestments, fetchAccounts]);
     
     // --- Rerun fetch transactions when selectedInvestmentId changes ---
     useEffect(() => {
@@ -143,8 +158,8 @@ function InvestmentsPage({ selectedProfile }) {
         e.preventDefault();
         setTxFormError('');
 
-        if (!selectedInvestmentId || !quantity || !price || !txDate) {
-            setTxFormError('All transaction fields are required.');
+        if (!selectedInvestmentId || !txAccountId || !quantity || !price || !txDate) {
+            setTxFormError('All fields including account are required.');
             return;
         }
 
@@ -154,6 +169,7 @@ function InvestmentsPage({ selectedProfile }) {
             
             const body = {
                 investment_id: selectedInvestmentId,
+                account_id: parseInt(txAccountId, 10),
                 transaction_type: txType,
                 quantity: parseFloat(quantity),
                 price_per_unit: parseFloat(price),
@@ -168,6 +184,10 @@ function InvestmentsPage({ selectedProfile }) {
             setQuantity('');
             setPrice('');
             setTxDate('');
+            setTxAccountId('');
+
+            // Dispatch event to refresh dashboard
+            window.dispatchEvent(new CustomEvent('transactionUpdated'));
 
         } catch (err) {
             const message = err.response?.data?.message || 'Failed to record transaction.';
@@ -242,6 +262,18 @@ function InvestmentsPage({ selectedProfile }) {
                         {investments.map(inv => (
                             <option key={inv.investment_id} value={inv.investment_id}>
                                 {inv.investment_name}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+                
+                <div className="mb-4">
+                    <label htmlFor="txAccount" className="block text-sm font-medium text-text-light dark:text-text-dark mb-1">Account:</label>
+                    <select id="txAccount" value={txAccountId || ''} onChange={(e) => setTxAccountId(e.target.value)} className="w-full px-3 py-2 text-sm border border-border-light dark:border-border-dark rounded-lg bg-background-light dark:bg-background-dark text-text-light dark:text-text-dark focus:outline-none focus:ring-2 focus:ring-primary" required>
+                        <option value="">Select an account</option>
+                        {accounts.map(acc => (
+                            <option key={acc.account_id} value={acc.account_id}>
+                                {acc.name} - ₹{parseFloat(acc.balance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </option>
                         ))}
                     </select>

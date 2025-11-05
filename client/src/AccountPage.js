@@ -159,6 +159,9 @@ function AccountPage({ isListView, selectedProfile }) {
             setTxFormAmount('');
             setTxFormDescription('');
             setTxFormError('');
+
+            // Dispatch event to refresh dashboard
+            window.dispatchEvent(new CustomEvent('transactionUpdated'));
         } catch (err) {
             setTxFormError('Failed to create transaction.');
         }
@@ -179,7 +182,9 @@ function AccountPage({ isListView, selectedProfile }) {
                 ? parseFloat(currentBalance) - parseFloat(amount)
                 : parseFloat(currentBalance) + parseFloat(amount);
             setCurrentBalance(newBalance);
-            
+
+            // Dispatch event to refresh dashboard
+            window.dispatchEvent(new CustomEvent('transactionUpdated'));
         } catch (err) {
             setTxFormError('Failed to delete transaction.');
         }

@@ -7,7 +7,8 @@ const {
     createAccount,
     updateAccount,
     deleteAccount,
-    getAccountDetails
+    getAccountDetails,
+    getHistoricalNetWorth
 } = require('../controllers/accountController');
 const { protect } = require('../middleware/authMiddleware');
 
@@ -16,6 +17,9 @@ const { protect } = require('../middleware/authMiddleware');
 router.route('/')
     .get(protect, getAllUserAccounts) // Add the GET handler
     .post(protect, createAccount);
+
+router.route('/profile/:profileId/net-worth-history')
+    .get(protect, getHistoricalNetWorth);
 
 router.route('/profile/:profileId')
     .get(protect, getAccountsByProfile);
