@@ -112,6 +112,54 @@ const createTransaction = async (req, res) => {
         
         const [createdTransaction] = await db.query('SELECT * FROM Transactions WHERE transaction_id = ?', [newTransaction.insertId]);
 
+        // Check for budget exceeded notification (only for expense transactions)
+        if (type === 'expense' && category_id) {
+            try {
+                const now = new Date();
+                const currentMonth = now.getMonth() + 1;
+                const currentYear = now.getFullYear();
+
+                // Check if there's a budget for this category in the current month/year
+                const [budgets] = await db.query(
+                    'SELECT B.*, ' +
+                    'COALESCE( (' +
+                        'SELECT SUM(T.amount) FROM Transactions T ' +
+                        'JOIN Accounts A ON T.account_id = A.account_id ' +
+                        'WHERE T.category_id = B.category_id ' +
+                        'AND A.profile_id = B.profile_id ' +
+                        'AND T.type = "expense" ' +
+                        'AND YEAR(T.time_stamp) = B.year ' +
+                        'AND MONTH(T.time_stamp) = B.month' +
+                    '), 0.00) AS spent_amount ' +
+                    'FROM Budgets B ' +
+                    'WHERE B.profile_id = ? AND B.category_id = ? AND B.month = ? AND B.year = ?',
+                    [account.profile_id, category_id, currentMonth, currentYear]
+                );
+
+                if (budgets.length > 0) {
+                    const budget = budgets[0];
+                    const spentAmount = parseFloat(budget.spent_amount || 0);
+                    const budgetLimit = parseFloat(budget.budget);
+
+                    // If spent amount exceeds or equals budget limit, create notification
+                    if (spentAmount >= budgetLimit) {
+                        const [categories] = await db.query('SELECT name FROM Categories WHERE category_id = ?', [category_id]);
+                        const categoryName = categories.length > 0 ? categories[0].name : 'Unknown Category';
+                        
+                        const message = `Budget exceeded for ${categoryName}: Spent ₹${spentAmount.toFixed(2)} out of ₹${budgetLimit.toFixed(2)} budget for ${new Date(currentYear, currentMonth - 1).toLocaleString('default', { month: 'long', year: 'numeric' })}.`;
+                        
+                        await db.query(
+                            'INSERT INTO Notifications (profile_id, message) VALUES (?, ?)',
+                            [account.profile_id, message]
+                        );
+                    }
+                }
+            } catch (budgetError) {
+                // Don't fail the transaction if budget check fails
+                console.error('Error checking budget for notification:', budgetError);
+            }
+        }
+
         res.status(201).json(createdTransaction[0]);
     } catch (error) {
         console.error(error);

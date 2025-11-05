@@ -73,4 +73,95 @@ const deleteRecurringTransaction = async (req, res) => {
     }
 };
 
-module.exports = { getRecurringTransactionsByProfile, createRecurringTransaction, updateRecurringTransaction, deleteRecurringTransaction };
+// Helper function to execute a recurring transaction and create notification
+const executeRecurringTransaction = async (recurringTransactionId, accountId, paymentMethodId, userId) => {
+    try {
+        // Get recurring transaction details
+        const [recurringTxs] = await db.query(
+            'SELECT RT.*, P.user_id FROM Recurring_Transactions RT JOIN Profiles P ON RT.profile_id = P.profile_id WHERE RT.recurring_id = ?',
+            [recurringTransactionId]
+        );
+
+        if (recurringTxs.length === 0) {
+            throw new Error('Recurring transaction not found');
+        }
+
+        const recurringTx = recurringTxs[0];
+        
+        // Verify user authorization
+        if (recurringTx.user_id !== userId) {
+            throw new Error('Not authorized');
+        }
+
+        // Check if end_date has passed
+        if (recurringTx.end_date) {
+            const endDate = new Date(recurringTx.end_date);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            if (endDate < today) {
+                throw new Error('Recurring transaction has ended');
+            }
+        }
+
+        // Get account details
+        const [accounts] = await db.query('SELECT profile_id, balance FROM Accounts WHERE account_id = ?', [accountId]);
+        if (accounts.length === 0) {
+            throw new Error('Account not found');
+        }
+        const account = accounts[0];
+
+        // Verify account belongs to the same profile
+        if (account.profile_id !== recurringTx.profile_id) {
+            throw new Error('Account does not belong to the same profile');
+        }
+
+        // Create the transaction
+        const transactionAmount = parseFloat(recurringTx.amount);
+        const newBalance = parseFloat(account.balance) - transactionAmount; // Assuming expense by default
+
+        await db.query('UPDATE Accounts SET balance = ? WHERE account_id = ?', [newBalance, accountId]);
+
+        const [newTransaction] = await db.query(
+            'INSERT INTO Transactions (account_id, type, amount, description, category_id, payment_method_id) VALUES (?, ?, ?, ?, ?, ?)',
+            [accountId, 'expense', transactionAmount, recurringTx.description || 'Recurring Transaction', recurringTx.category_id, paymentMethodId]
+        );
+
+        // Create notification
+        const message = `Recurring transaction executed: ${recurringTx.description || 'Recurring Transaction'} - ₹${transactionAmount.toFixed(2)}`;
+        await db.query(
+            'INSERT INTO Notifications (profile_id, message) VALUES (?, ?)',
+            [recurringTx.profile_id, message]
+        );
+
+        return { success: true, transactionId: newTransaction.insertId };
+    } catch (error) {
+        console.error('Error executing recurring transaction:', error);
+        throw error;
+    }
+};
+
+// Endpoint to execute a recurring transaction manually
+const executeRecurringTransactionEndpoint = async (req, res) => {
+    try {
+        const { recurringId, accountId, paymentMethodId } = req.body;
+
+        if (!recurringId || !accountId || !paymentMethodId) {
+            return res.status(400).json({ message: 'Recurring transaction ID, account ID, and payment method ID are required' });
+        }
+
+        const result = await executeRecurringTransaction(recurringId, accountId, paymentMethodId, req.user.user_id);
+        res.status(200).json({ message: 'Recurring transaction executed successfully', ...result });
+    } catch (error) {
+        console.error('Error executing recurring transaction:', error);
+        res.status(500).json({ message: error.message || 'Server Error' });
+    }
+};
+
+module.exports = { 
+    getRecurringTransactionsByProfile, 
+    createRecurringTransaction, 
+    updateRecurringTransaction, 
+    deleteRecurringTransaction,
+    executeRecurringTransaction,
+    executeRecurringTransactionEndpoint
+};

@@ -15,6 +15,7 @@ import RecurringPage from './RecurringPage';
 import ProfileSelector from './ProfileSelector';
 import ClientsPage from './ClientsPage';
 import InvoicesPage from './InvoicesPage';
+import NotificationsPage from './NotificationsPage';
 
 function App() {
   const [token, setToken] = useState(localStorage.getItem('token') || null);
@@ -134,6 +135,11 @@ function App() {
         <Route 
           path="/recurring" 
           element={<RecurringPage selectedProfile={selectedProfile} />}
+        />
+        
+        <Route 
+          path="/notifications" 
+          element={<NotificationsPage selectedProfile={selectedProfile} />}
         />
         
         {/* Business-only routes - redirect personal profiles */}

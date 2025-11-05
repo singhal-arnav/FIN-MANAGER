@@ -175,12 +175,12 @@ CREATE TABLE Invoices (
 -- SECTION 5: UTILITY TABLE (Notifications)
 -- =============================================
 
--- Notifications are linked to the user, not the profile.
+-- Notifications are linked to the profile, making them profile-specific.
 CREATE TABLE Notifications (
     notification_id INT             PRIMARY KEY AUTO_INCREMENT,
-    user_id         INT             NOT NULL,
+    profile_id      INT             NOT NULL,
     message         TEXT            NOT NULL,
     is_read         BOOLEAN         NOT NULL DEFAULT FALSE,
     created_at      TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES Users(user_id) ON DELETE CASCADE
+    FOREIGN KEY (profile_id) REFERENCES Profiles(profile_id) ON DELETE CASCADE
 );

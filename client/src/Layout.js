@@ -1,8 +1,54 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
+import axios from 'axios';
+
+const API_URL = 'http://localhost:5000/api';
 
 function Layout({ onLogout, userEmail, selectedProfile, onSwitchProfile, isBusinessProfile }) {
-    const location = useLocation(); 
+    const location = useLocation();
+    const [unreadCount, setUnreadCount] = useState(0); 
+
+    // Fetch unread notifications count
+    const fetchUnreadCount = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            if (!token || !selectedProfile?.profile_id) return;
+            
+            const authHeaders = { headers: { 'Authorization': `Bearer ${token}` } };
+            const response = await axios.get(`${API_URL}/notifications/profile/${selectedProfile.profile_id}/unread`, authHeaders);
+            setUnreadCount(response.data.length);
+        } catch (err) {
+            // Silently fail - don't break the layout if notifications fail
+            console.error('Failed to fetch unread notifications count:', err);
+        }
+    };
+
+    // Fetch unread count on mount and when location changes
+    useEffect(() => {
+        if (selectedProfile?.profile_id) {
+            fetchUnreadCount();
+        }
+        
+        // Refresh count every 30 seconds
+        const interval = setInterval(() => {
+            if (selectedProfile?.profile_id) {
+                fetchUnreadCount();
+            }
+        }, 30000);
+        
+        // Listen for notification updates from NotificationsPage
+        const handleNotificationUpdate = () => {
+            if (selectedProfile?.profile_id) {
+                fetchUnreadCount();
+            }
+        };
+        window.addEventListener('notificationUpdated', handleNotificationUpdate);
+        
+        return () => {
+            clearInterval(interval);
+            window.removeEventListener('notificationUpdated', handleNotificationUpdate);
+        };
+    }, [location.pathname, selectedProfile?.profile_id]); // Refresh when navigating or profile changes
 
     const getLinkClass = (path) => {
         const isActive = location.pathname === path || 
@@ -74,6 +120,15 @@ function Layout({ onLogout, userEmail, selectedProfile, onSwitchProfile, isBusin
                         <Link to="/recurring" className={getLinkClass('/recurring')}>
                             <span className="material-symbols-outlined">repeat</span>
                             <p className="text-sm font-medium">Recurring</p>
+                        </Link>
+                        <Link to="/notifications" className={getLinkClass('/notifications')}>
+                            <span className="material-symbols-outlined">notifications</span>
+                            <p className="text-sm font-medium">Notifications</p>
+                            {unreadCount > 0 && (
+                                <span className="ml-auto bg-red-500 text-white text-xs font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1.5">
+                                    {unreadCount > 99 ? '99+' : unreadCount}
+                                </span>
+                            )}
                         </Link>
                         
                         {/* Business features - only show for business profiles */}

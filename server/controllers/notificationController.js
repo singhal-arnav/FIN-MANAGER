@@ -1,12 +1,18 @@
 const db = require('../config/db');
 
-const getNotificationsByUser = async (req, res) => {
+const getNotificationsByProfile = async (req, res) => {
     try {
-        const userId = req.user.user_id;
+        const { profileId } = req.params;
+
+        // Verify the profile belongs to the logged-in user
+        const [profiles] = await db.query('SELECT user_id FROM Profiles WHERE profile_id = ?', [profileId]);
+        if (profiles.length === 0 || profiles[0].user_id !== req.user.user_id) {
+            return res.status(401).json({ message: 'Not authorized to view notifications for this profile' });
+        }
 
         const [notifications] = await db.query(
-            'SELECT * FROM Notifications WHERE user_id = ? ORDER BY created_at DESC',
-            [userId]
+            'SELECT * FROM Notifications WHERE profile_id = ? ORDER BY created_at DESC',
+            [profileId]
         );
 
         res.status(200).json(notifications);
@@ -18,11 +24,17 @@ const getNotificationsByUser = async (req, res) => {
 
 const getUnreadNotifications = async (req, res) => {
     try {
-        const userId = req.user.user_id;
+        const { profileId } = req.params;
+
+        // Verify the profile belongs to the logged-in user
+        const [profiles] = await db.query('SELECT user_id FROM Profiles WHERE profile_id = ?', [profileId]);
+        if (profiles.length === 0 || profiles[0].user_id !== req.user.user_id) {
+            return res.status(401).json({ message: 'Not authorized to view notifications for this profile' });
+        }
 
         const [notifications] = await db.query(
-            'SELECT * FROM Notifications WHERE user_id = ? AND is_read = FALSE ORDER BY created_at DESC',
-            [userId]
+            'SELECT * FROM Notifications WHERE profile_id = ? AND is_read = FALSE ORDER BY created_at DESC',
+            [profileId]
         );
 
         res.status(200).json(notifications);
@@ -34,21 +46,21 @@ const getUnreadNotifications = async (req, res) => {
 
 const createNotification = async (req, res) => {
     try {
-        const { user_id, message } = req.body;
+        const { profile_id, message } = req.body;
 
-        if (!user_id || !message) {
-            return res.status(400).json({ message: 'User ID and message are required' });
+        if (!profile_id || !message) {
+            return res.status(400).json({ message: 'Profile ID and message are required' });
         }
 
-        // Only allow creating notifications for the logged-in user (for now)
-        // In a production system, you might have admin roles that can create notifications for other users
-        if (user_id !== req.user.user_id) {
-            return res.status(401).json({ message: 'Not authorized to create notifications for other users' });
+        // Verify the profile belongs to the logged-in user
+        const [profiles] = await db.query('SELECT user_id FROM Profiles WHERE profile_id = ?', [profile_id]);
+        if (profiles.length === 0 || profiles[0].user_id !== req.user.user_id) {
+            return res.status(401).json({ message: 'Not authorized to create notifications for this profile' });
         }
 
         const [newNotification] = await db.query(
-            'INSERT INTO Notifications (user_id, message) VALUES (?, ?)',
-            [user_id, message]
+            'INSERT INTO Notifications (profile_id, message) VALUES (?, ?)',
+            [profile_id, message]
         );
 
         const [createdNotification] = await db.query(
@@ -67,9 +79,9 @@ const markAsRead = async (req, res) => {
     try {
         const notificationId = req.params.id;
 
-        // Verify the notification belongs to the logged-in user
+        // Verify the notification belongs to a profile owned by the logged-in user
         const [notifications] = await db.query(
-            'SELECT * FROM Notifications WHERE notification_id = ?',
+            'SELECT N.*, P.user_id FROM Notifications N JOIN Profiles P ON N.profile_id = P.profile_id WHERE N.notification_id = ?',
             [notificationId]
         );
 
@@ -100,11 +112,17 @@ const markAsRead = async (req, res) => {
 
 const markAllAsRead = async (req, res) => {
     try {
-        const userId = req.user.user_id;
+        const { profileId } = req.params;
+
+        // Verify the profile belongs to the logged-in user
+        const [profiles] = await db.query('SELECT user_id FROM Profiles WHERE profile_id = ?', [profileId]);
+        if (profiles.length === 0 || profiles[0].user_id !== req.user.user_id) {
+            return res.status(401).json({ message: 'Not authorized to mark notifications for this profile' });
+        }
 
         await db.query(
-            'UPDATE Notifications SET is_read = TRUE WHERE user_id = ? AND is_read = FALSE',
-            [userId]
+            'UPDATE Notifications SET is_read = TRUE WHERE profile_id = ? AND is_read = FALSE',
+            [profileId]
         );
 
         res.status(200).json({ message: 'All notifications marked as read' });
@@ -118,9 +136,9 @@ const deleteNotification = async (req, res) => {
     try {
         const notificationId = req.params.id;
 
-        // Verify the notification belongs to the logged-in user
+        // Verify the notification belongs to a profile owned by the logged-in user
         const [notifications] = await db.query(
-            'SELECT * FROM Notifications WHERE notification_id = ?',
+            'SELECT N.*, P.user_id FROM Notifications N JOIN Profiles P ON N.profile_id = P.profile_id WHERE N.notification_id = ?',
             [notificationId]
         );
 
@@ -142,7 +160,7 @@ const deleteNotification = async (req, res) => {
 };
 
 module.exports = {
-    getNotificationsByUser,
+    getNotificationsByProfile,
     getUnreadNotifications,
     createNotification,
     markAsRead,
