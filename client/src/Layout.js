@@ -76,7 +76,7 @@ function Layout({ onLogout, userEmail, selectedProfile, onSwitchProfile, isBusin
                             <p className="text-sm font-medium">Recurring</p>
                         </Link>
                         
-                        {/* Business-only routes */}
+                        {/* Business features - only show for business profiles */}
                         {isBusinessProfile && (
                             <>
                                 <div className="h-px bg-border-light dark:bg-border-dark my-2"></div>

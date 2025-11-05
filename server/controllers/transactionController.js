@@ -47,6 +47,34 @@ const getTransactionsByAccount = async (req, res) => {
     }
 };
 
+const getTransactionsByProfile = async (req, res) => {
+    try {
+        const { profileId } = req.params;
+        const limit = parseInt(req.query.limit) || 10;
+
+        const [profiles] = await db.query('SELECT user_id FROM Profiles WHERE profile_id = ?', [profileId]);
+        if (profiles.length === 0 || profiles[0].user_id !== req.user.user_id) {
+            return res.status(401).json({ message: 'Not authorized to view these transactions' });
+        }
+
+        const [transactions] = await db.query(
+            'SELECT T.*, C.name as category_name, A.name as account_name ' +
+            'FROM Transactions T ' +
+            'JOIN Accounts A ON T.account_id = A.account_id ' +
+            'LEFT JOIN Categories C ON T.category_id = C.category_id ' +
+            'WHERE A.profile_id = ? ' +
+            'ORDER BY T.time_stamp DESC ' +
+            'LIMIT ?',
+            [profileId, limit]
+        );
+
+        res.status(200).json(transactions);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server Error' });
+    }
+};
+
 const createTransaction = async (req, res) => {
     try {
         const { account_id, type, amount, description, category_id, payment_method_id } = req.body;
@@ -130,6 +158,7 @@ const deleteTransaction = async (req, res) => {
 
 module.exports = {
     getAllUserTransactions,
+    getTransactionsByProfile,
     getTransactionsByAccount,
     createTransaction,
     deleteTransaction,

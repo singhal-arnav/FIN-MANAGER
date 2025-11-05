@@ -27,13 +27,32 @@ const createCategory = async (req, res) => {
             return res.status(401).json({ message: 'Not authorized' });
         }
 
+        // Normalize name for duplicate checking (trim and case-insensitive)
+        const normalizedName = name.trim();
+        if (!normalizedName) {
+            return res.status(400).json({ message: 'Category name cannot be empty' });
+        }
+
+        // Application-level duplicate guard (works even if DB schema not migrated)
+        const [existing] = await db.query(
+            'SELECT 1 FROM Categories WHERE profile_id = ? AND LOWER(name) = LOWER(?) LIMIT 1',
+            [profile_id, normalizedName]
+        );
+        if (existing.length > 0) {
+            return res.status(400).json({ message: 'A category with this name already exists for this profile.' });
+        }
+
         const [newCategory] = await db.query(
             'INSERT INTO Categories (profile_id, name, parent_category_id) VALUES (?, ?, ?)',
-            [profile_id, name, parent_category_id || null]
+            [profile_id, normalizedName, parent_category_id || null]
         );
         const [createdCategory] = await db.query('SELECT * FROM Categories WHERE category_id = ?', [newCategory.insertId]);
         res.status(201).json(createdCategory[0]);
     } catch (error) {
+        if (error.code === 'ER_DUP_ENTRY') {
+            return res.status(400).json({ message: 'A category with this name already exists for this profile.' });
+        }
+        console.error(error);
         res.status(500).json({ message: 'Server Error' });
     }
 };
@@ -48,10 +67,29 @@ const updateCategory = async (req, res) => {
             return res.status(401).json({ message: 'Not authorized' });
         }
 
-        await db.query('UPDATE Categories SET name = ? WHERE category_id = ?', [name, categoryId]);
+        const normalizedName = (name || '').trim();
+        if (!normalizedName) {
+            return res.status(400).json({ message: 'Category name cannot be empty' });
+        }
+
+        // Prevent duplicates on update as well
+        const profileId = categories[0].profile_id;
+        const [dup] = await db.query(
+            'SELECT 1 FROM Categories WHERE profile_id = ? AND LOWER(name) = LOWER(?) AND category_id <> ? LIMIT 1',
+            [profileId, normalizedName, categoryId]
+        );
+        if (dup.length > 0) {
+            return res.status(400).json({ message: 'A category with this name already exists for this profile.' });
+        }
+
+        await db.query('UPDATE Categories SET name = ? WHERE category_id = ?', [normalizedName, categoryId]);
         const [updatedCategory] = await db.query('SELECT * FROM Categories WHERE category_id = ?', [categoryId]);
         res.status(200).json(updatedCategory[0]);
     } catch (error) {
+        if (error.code === 'ER_DUP_ENTRY') {
+            return res.status(400).json({ message: 'A category with this name already exists for this profile.' });
+        }
+        console.error(error);
         res.status(500).json({ message: 'Server Error' });
     }
 };

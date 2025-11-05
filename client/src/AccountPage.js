@@ -4,9 +4,8 @@ import { useParams, useLocation, Link } from 'react-router-dom';
 
 const API_URL = 'http://localhost:5000/api';
 
-function AccountPage({ isListView }) {
+function AccountPage({ isListView, selectedProfile }) {
     // --- COMMON STATE ---
-    const [profiles, setProfiles] = useState([]);
     const [categories, setCategories] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -33,7 +32,6 @@ function AccountPage({ isListView }) {
     const [accounts, setAccounts] = useState([]);
     const [newAccountName, setNewAccountName] = useState('');
     const [newAccountBalance, setNewAccountBalance] = useState('');
-    const [selectedProfile, setSelectedProfile] = useState('');
     const [accountFormError, setAccountFormError] = useState('');
 
 
@@ -44,17 +42,14 @@ function AccountPage({ isListView }) {
         
         const fetchListData = async () => {
             try {
-                const [profilesRes, accountsRes] = await Promise.all([
-                    axios.get(`${API_URL}/profiles`, authHeaders),
-                    axios.get(`${API_URL}/accounts`, authHeaders)
-                ]);
-
-                setProfiles(profilesRes.data);
-                setAccounts(accountsRes.data);
-
-                if (profilesRes.data.length > 0) {
-                    setSelectedProfile(profilesRes.data[0].profile_id); 
+                if (!selectedProfile?.profile_id) {
+                    setError('No profile selected.');
+                    setLoading(false);
+                    return;
                 }
+
+                const accountsRes = await axios.get(`${API_URL}/accounts/profile/${selectedProfile.profile_id}`, authHeaders);
+                setAccounts(accountsRes.data);
             } catch (err) {
                 setError('Could not fetch account list data.');
             } finally {
@@ -103,15 +98,15 @@ function AccountPage({ isListView }) {
             fetchDetailData();
         }
 
-    }, [isListView, accountId, initialProfileId]); 
+    }, [isListView, accountId, initialProfileId, selectedProfile]); 
 
 
     // --- HANDLER: Create New Account (Used in List View) ---
     const handleCreateAccount = async (e) => {
         e.preventDefault();
         setAccountFormError('');
-        if (!newAccountName || !selectedProfile) {
-            setAccountFormError('Profile and Account Name are required.');
+        if (!newAccountName || !selectedProfile?.profile_id) {
+            setAccountFormError('Account Name is required.');
             return;
         }
         try {
@@ -120,7 +115,7 @@ function AccountPage({ isListView }) {
             const body = { 
                 name: newAccountName, 
                 balance: parseFloat(newAccountBalance) || 0.00, 
-                profile_id: selectedProfile 
+                profile_id: selectedProfile.profile_id 
             };
             const response = await axios.post(`${API_URL}/accounts`, body, authHeaders);
             
@@ -200,26 +195,18 @@ function AccountPage({ isListView }) {
                     {accountFormError && <p className="text-negative text-sm text-center mb-4">{accountFormError}</p>}
                     
                     <div className="mb-4">
-                        <label htmlFor="profileSelect" className="block text-sm font-medium text-text-light dark:text-text-dark mb-1">Add to Profile:</label>
-                        <select id="profileSelect" value={selectedProfile} onChange={(e) => setSelectedProfile(e.target.value)} 
-                            className="w-full px-3 py-2 text-sm border border-border-light dark:border-border-dark rounded-lg bg-background-light dark:bg-background-dark text-text-light dark:text-text-dark focus:outline-none focus:ring-2 focus:ring-primary" 
-                            disabled={profiles.length === 0}>
-                            {profiles.length === 0 ? (<option value="">Create a profile first</option>) : (profiles.map(p => (<option key={p.profile_id} value={p.profile_id}>{p.profile_name} ({p.profile_type})</option>)))}
-                        </select>
-                    </div>
-                    <div className="mb-4">
                         <label htmlFor="accountName" className="block text-sm font-medium text-text-light dark:text-text-dark mb-1">Account Name:</label>
                         <input id="accountName" type="text" value={newAccountName} onChange={(e) => setNewAccountName(e.target.value)} 
                             className="w-full px-3 py-2 text-sm border border-border-light dark:border-border-dark rounded-lg bg-background-light dark:bg-background-dark text-text-light dark:text-text-dark focus:outline-none focus:ring-2 focus:ring-primary" 
-                            placeholder="e.g., Checking" disabled={profiles.length === 0}/>
+                            placeholder="e.g., Checking" />
                     </div>
                     <div className="mb-4">
                         <label htmlFor="accountBalance" className="block text-sm font-medium text-text-light dark:text-text-dark mb-1">Initial Balance: (Optional)</label>
                         <input id="accountBalance" type="number" step="0.01" value={newAccountBalance} onChange={(e) => setNewAccountBalance(e.target.value)} 
                             className="w-full px-3 py-2 text-sm border border-border-light dark:border-border-dark rounded-lg bg-background-light dark:bg-background-dark text-text-light dark:text-text-dark focus:outline-none focus:ring-2 focus:ring-primary" 
-                            placeholder="0.00" disabled={profiles.length === 0}/>
+                            placeholder="0.00" />
                     </div>
-                    <button type="submit" className="mt-auto w-full py-2 text-sm text-white bg-primary rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled={profiles.length === 0}>Create Account</button>
+                    <button type="submit" className="mt-auto w-full py-2 text-sm text-white bg-primary rounded-lg hover:bg-primary/90 transition-colors">Create Account</button>
                 </form>
             );
         };
@@ -236,7 +223,7 @@ function AccountPage({ isListView }) {
                             state={{ accountName: account.name, accountBalance: account.balance, profileId: account.profile_id }} 
                         >
                             <span className="text-text-light dark:text-text-dark font-medium">{account.name}</span>
-                            <span className="text-sm font-semibold text-positive">${parseFloat(account.balance).toFixed(2)}</span>
+                            <span className="text-sm font-semibold text-positive">₹{parseFloat(account.balance).toFixed(2)}</span>
                         </Link>
                     ))}
                 </div>
@@ -351,7 +338,7 @@ function AccountPage({ isListView }) {
                             </div>
                             <div className="flex items-center gap-3">
                                 <span className={`font-semibold ${tx.type === 'income' ? 'text-positive' : 'text-negative'}`}>
-                                    {tx.type === 'income' ? '+' : '-'}${parseFloat(tx.amount).toFixed(2)}
+                                    {tx.type === 'income' ? '+' : '-'}₹{parseFloat(tx.amount).toFixed(2)}
                                 </span>
                                 <button onClick={() => handleDeleteTransaction(tx.transaction_id, tx.amount, tx.type)} 
                                     className="text-negative text-xl font-bold hover:text-negative/80 transition-colors" 
@@ -367,7 +354,7 @@ function AccountPage({ isListView }) {
             <div className="w-full max-w-4xl mx-auto p-8">
                 <div>
                     <h2 className="text-text-light dark:text-text-dark text-2xl font-bold text-center mb-2">{currentAccountName}</h2>
-                    <h3 className="text-text-muted-light dark:text-text-muted-dark text-base text-center mb-8">Current Balance: ${parseFloat(currentBalance).toFixed(2)}</h3>
+                    <h3 className="text-text-muted-light dark:text-text-muted-dark text-base text-center mb-8">Current Balance: ₹{parseFloat(currentBalance).toFixed(2)}</h3>
                     
                     <div className="mb-8 p-6 bg-card-light dark:bg-card-dark rounded-xl border border-border-light dark:border-border-dark">
                         {renderAddTransactionForm()}

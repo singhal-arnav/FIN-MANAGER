@@ -54,7 +54,8 @@ function CategoriesPage({ selectedProfile }) {
             setCategories([...categories, response.data]);
             setNewCategoryName('');
         } catch (err) {
-            setCategoryFormError('Failed to create category.');
+            const message = err.response?.data?.message || 'Failed to create category.';
+            setCategoryFormError(message);
         }
     };
 

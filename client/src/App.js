@@ -13,6 +13,8 @@ import GoalsPage from './GoalsPage';
 import InvestmentsPage from './InvestmentsPage';
 import RecurringPage from './RecurringPage';
 import ProfileSelector from './ProfileSelector';
+import ClientsPage from './ClientsPage';
+import InvoicesPage from './InvoicesPage';
 
 function App() {
   const [token, setToken] = useState(localStorage.getItem('token') || null);
@@ -132,6 +134,25 @@ function App() {
         <Route 
           path="/recurring" 
           element={<RecurringPage selectedProfile={selectedProfile} />}
+        />
+        
+        {/* Business-only routes - redirect personal profiles */}
+        <Route 
+          path="/clients" 
+          element={
+            isBusinessProfile 
+              ? <ClientsPage selectedProfile={selectedProfile} />
+              : <Navigate to="/dashboard" replace />
+          }
+        />
+        
+        <Route 
+          path="/invoices" 
+          element={
+            isBusinessProfile 
+              ? <InvoicesPage selectedProfile={selectedProfile} />
+              : <Navigate to="/dashboard" replace />
+          }
         />
       </Route>
       

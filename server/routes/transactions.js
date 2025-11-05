@@ -3,6 +3,7 @@ const router = express.Router();
 
 const {
     getAllUserTransactions,
+    getTransactionsByProfile,
     getTransactionsByAccount,
     createTransaction,
     deleteTransaction
@@ -12,6 +13,9 @@ const { protect } = require('../middleware/authMiddleware');
 router.route('/')
     .get(protect, getAllUserTransactions)
     .post(protect, createTransaction);
+
+router.route('/profile/:profileId')
+    .get(protect, getTransactionsByProfile);
 
 router.route('/account/:accountId')
     .get(protect, getTransactionsByAccount);

@@ -65,7 +65,8 @@ CREATE TABLE Categories (
     name                VARCHAR(50) NOT NULL,
     parent_category_id  INT         NULL,
     FOREIGN KEY (profile_id) REFERENCES Profiles(profile_id) ON DELETE CASCADE,
-    FOREIGN KEY (parent_category_id) REFERENCES Categories(category_id) ON DELETE SET NULL
+    FOREIGN KEY (parent_category_id) REFERENCES Categories(category_id) ON DELETE SET NULL,
+    UNIQUE(profile_id, name)
 );
 
 -- Transactions Table: All income/expense records, linked to an account.
@@ -122,7 +123,8 @@ CREATE TABLE Financial_Goals (
     current_amount  DECIMAL(15, 2)  NOT NULL DEFAULT 0.00,
     target_date     DATE,
     status          ENUM('In Progress', 'Achieved', 'Cancelled') NOT NULL DEFAULT 'In Progress',
-    FOREIGN KEY (profile_id) REFERENCES Profiles(profile_id) ON DELETE CASCADE
+    FOREIGN KEY (profile_id) REFERENCES Profiles(profile_id) ON DELETE CASCADE,
+    UNIQUE(profile_id, goal_name, target_amount, target_date)
 );
 
 CREATE TABLE Investments (

@@ -4,8 +4,7 @@ import { Link } from 'react-router-dom';
 
 const API_URL = 'http://localhost:5000/api';
 
-function Dashboard({ userEmail }) {
-    const [profiles, setProfiles] = useState([]);
+function Dashboard({ userEmail, selectedProfile }) {
     const [accounts, setAccounts] = useState([]);
     const [netWorth, setNetWorth] = useState(0);
     const [recentTransactions, setRecentTransactions] = useState([]);
@@ -20,36 +19,38 @@ function Dashboard({ userEmail }) {
                 setLoading(true);
                 const token = localStorage.getItem('token');
                 const authHeaders = { headers: { 'Authorization': `Bearer ${token}` } };
-                
-                const [profilesRes, accountsRes, netWorthRes, transactionsRes, categoriesRes] = await Promise.all([
-                    axios.get(`${API_URL}/profiles`, authHeaders),
-                    axios.get(`${API_URL}/accounts`, authHeaders),
-                    axios.get(`${API_URL}/summary/net-worth`, authHeaders),
-                    axios.get(`${API_URL}/transactions?limit=5`, authHeaders),
-                    axios.get(`${API_URL}/categories`, authHeaders)
+                if (!selectedProfile?.profile_id) {
+                    setError('No profile selected.');
+                    setLoading(false);
+                    return;
+                }
+
+                const profileId = selectedProfile.profile_id;
+
+                const [accountsRes, transactionsRes, categoriesRes] = await Promise.all([
+                    axios.get(`${API_URL}/accounts/profile/${profileId}`, authHeaders),
+                    axios.get(`${API_URL}/transactions/profile/${profileId}?limit=5`, authHeaders),
+                    axios.get(`${API_URL}/categories/profile/${profileId}`, authHeaders)
                 ]);
 
-                setProfiles(profilesRes.data);
-                setAccounts(accountsRes.data);
-                setNetWorth(netWorthRes.data.net_worth || 0);
+                const fetchedAccounts = accountsRes.data || [];
+                setAccounts(fetchedAccounts);
+                const computedNetWorth = fetchedAccounts.reduce((sum, a) => sum + (parseFloat(a.balance) || 0), 0);
+                setNetWorth(computedNetWorth);
                 setRecentTransactions(transactionsRes.data || []);
                 setCategories(categoriesRes.data || []);
 
-                // Fetch budgets for the current month
-                if (profilesRes.data.length > 0) {
-                    const now = new Date();
-                    const currentYear = now.getFullYear();
-                    const currentMonth = now.getMonth() + 1;
-                    try {
-                        const budgetsRes = await axios.get(
-                            `${API_URL}/budgets/profile/${profilesRes.data[0].profile_id}/${currentYear}/${currentMonth}`,
-                            authHeaders
-                        );
-                        setBudgets(budgetsRes.data || []);
-                    } catch (budgetErr) {
-                        // Silently fail if no budgets exist
-                        setBudgets([]);
-                    }
+                const now = new Date();
+                const currentYear = now.getFullYear();
+                const currentMonth = now.getMonth() + 1;
+                try {
+                    const budgetsRes = await axios.get(
+                        `${API_URL}/budgets/profile/${profileId}/${currentYear}/${currentMonth}`,
+                        authHeaders
+                    );
+                    setBudgets(budgetsRes.data || []);
+                } catch (budgetErr) {
+                    setBudgets([]);
                 }
             } catch (err) {
                 setError('Could not fetch dashboard data. Please try again later.');
@@ -58,7 +59,7 @@ function Dashboard({ userEmail }) {
             }
         };
         fetchDashboardData();
-    }, []);
+    }, [selectedProfile]);
 
     if (loading) return (
         <div className="flex items-center justify-center h-full">
@@ -125,7 +126,7 @@ function Dashboard({ userEmail }) {
                             <div>
                                 <p className="text-text-light dark:text-text-dark text-base font-medium">Total Net Worth</p>
                                 <p className="text-text-light dark:text-text-dark text-4xl font-bold mt-1">
-                                    ${netWorth.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    ₹{netWorth.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </p>
                             </div>
                             <div className="flex gap-1 items-center">
@@ -147,7 +148,7 @@ function Dashboard({ userEmail }) {
                                                 <div 
                                                     className="w-full bg-primary rounded-t-lg transition-all hover:opacity-80"
                                                     style={{ height: `${height}%` }}
-                                                    title={`${account.name}: $${accountBalance.toFixed(2)}`}
+                                                    title={`${account.name}: ₹${accountBalance.toFixed(2)}`}
                                                 ></div>
                                             </div>
                                         );
@@ -194,7 +195,7 @@ function Dashboard({ userEmail }) {
                                         </div>
                                         <div className="text-right">
                                             <p className={`font-semibold ${tx.type === 'income' ? 'text-positive' : 'text-negative'}`}>
-                                                {tx.type === 'income' ? '+' : '-'}${parseFloat(tx.amount).toFixed(2)}
+                                                {tx.type === 'income' ? '+' : '-'}₹{parseFloat(tx.amount).toFixed(2)}
                                             </p>
                                             <p className="text-text-muted-light dark:text-text-muted-dark text-sm">
                                                 {new Date(tx.time_stamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
@@ -243,7 +244,7 @@ function Dashboard({ userEmail }) {
                                                 ? 'text-text-light dark:text-text-dark' 
                                                 : 'text-negative'
                                         }`}>
-                                            ${Math.abs(account.balance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            ₹{Math.abs(account.balance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                         </p>
                                     </div>
                                 ))}
@@ -286,7 +287,7 @@ function Dashboard({ userEmail }) {
                                         <div className="absolute inset-0 flex flex-col items-center justify-center">
                                             <p className="text-text-muted-light dark:text-text-muted-dark text-sm">Total Spent</p>
                                             <p className="text-text-light dark:text-text-dark text-xl font-bold">
-                                                ${totalSpent.toFixed(0)}
+                                                ₹{totalSpent.toFixed(0)}
                                             </p>
                                         </div>
                                     </div>
@@ -329,7 +330,7 @@ function Dashboard({ userEmail }) {
                                             <div className="flex justify-between text-sm mb-1">
                                                 <p className="font-medium text-text-light dark:text-text-dark">{category?.name || 'Unknown'}</p>
                                                 <p className="text-text-muted-light dark:text-text-muted-dark">
-                                                    ${spent.toFixed(0)} / ${limit.toFixed(0)}
+                                                    ₹{spent.toFixed(0)} / ₹{limit.toFixed(0)}
                                                 </p>
                                             </div>
                                             <div className="w-full bg-background-light dark:bg-background-dark rounded-full h-2">

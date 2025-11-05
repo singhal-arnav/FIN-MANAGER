@@ -3,18 +3,12 @@ import axios from 'axios';
 
 const API_URL = 'http://localhost:5000/api';
 
-function InvestmentsPage() {
-    // eslint-disable-next-line no-unused-vars
-    const [profiles, setProfiles] = useState([]); 
-    const [personalProfiles, setPersonalProfiles] = useState([]);
+function InvestmentsPage({ selectedProfile }) {
     const [investments, setInvestments] = useState([]);
     const [transactions, setTransactions] = useState([]);
     
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-
-    // State for filtering and view control
-    const [selectedProfile, setSelectedProfile] = useState('');
     const [selectedInvestmentId, setSelectedInvestmentId] = useState(null);
     const [viewMode, setViewMode] = useState('transactions'); // 👈 NEW: 'transactions' or 'assets'
 
@@ -84,43 +78,24 @@ function InvestmentsPage() {
 
     // --- Initial Data Fetching ---
     useEffect(() => {
+        if (!selectedProfile?.profile_id) {
+            setError('No profile selected. Please select a profile.');
+            setLoading(false);
+            return;
+        }
+
         const fetchInitialData = async () => {
             try {
                 setLoading(true);
                 const token = localStorage.getItem('token');
-                const authHeaders = { headers: { 'Authorization': `Bearer ${token}` } };
-                
-                const profilesRes = await axios.get(`${API_URL}/profiles`, authHeaders);
-                const fetchedProfiles = profilesRes.data;
-
-                const personal = fetchedProfiles.filter(p => p.profile_type === 'personal');
-                setProfiles(fetchedProfiles);
-                setPersonalProfiles(personal);
-
-                if (personal.length > 0) {
-                    const defaultProfileId = personal[0].profile_id;
-                    setSelectedProfile(defaultProfileId);
-                    
-                    fetchInvestments(defaultProfileId, token);
-                } else {
-                    setError('No personal profiles found. Investments must be linked to a personal profile.');
-                }
-
+                fetchInvestments(selectedProfile.profile_id, token);
             } catch (err) {
                 setError('Failed to fetch initial data.');
-            } finally {
                 setLoading(false);
             }
         };
 
         fetchInitialData();
-    }, [fetchInvestments]);
-
-    // --- Rerun fetch investments when selectedProfile changes ---
-    useEffect(() => {
-        if (selectedProfile) {
-            fetchInvestments(selectedProfile);
-        }
     }, [selectedProfile, fetchInvestments]);
     
     // --- Rerun fetch transactions when selectedInvestmentId changes ---
@@ -136,8 +111,8 @@ function InvestmentsPage() {
         e.preventDefault();
         setAssetFormError('');
 
-        if (!selectedProfile || !assetName) {
-            setAssetFormError('Investment name and a Personal Profile are required.');
+        if (!selectedProfile?.profile_id || !assetName) {
+            setAssetFormError('Investment name is required.');
             return;
         }
 
@@ -145,13 +120,12 @@ function InvestmentsPage() {
             const token = localStorage.getItem('token');
             const authHeaders = { headers: { 'Authorization': `Bearer ${token}` } };
             
-            const body = { profile_id: selectedProfile, investment_name: assetName, investment_type: assetType || 'Stock' };
+            const body = { profile_id: selectedProfile.profile_id, investment_name: assetName, investment_type: assetType || 'Stock' };
 
             // 🎯 API: POST /api/investments
             await axios.post(`${API_URL}/investments`, body, authHeaders);
             
-            // Re-fetch everything to ensure list integrity
-            await fetchInvestments(selectedProfile, token); // Use await here for clean state update
+            await fetchInvestments(selectedProfile.profile_id, token);
             setAssetName('');
             setAssetType('');
 
@@ -205,8 +179,8 @@ function InvestmentsPage() {
     // --- RENDER SECTIONS ---
 
     const renderAssetForm = () => { 
-        if (personalProfiles.length === 0) {
-            return <p className="text-negative text-sm text-center mb-4">Please create a **Personal Profile** first.</p>;
+        if (!selectedProfile) {
+            return <p className="text-negative text-sm text-center mb-4">Please select a profile first.</p>;
         }
         return (
             <form onSubmit={handleCreateInvestment} className="flex flex-col h-full">
@@ -289,7 +263,7 @@ function InvestmentsPage() {
                 
                 <div className="grid grid-cols-2 gap-4 mb-4">
                     <div>
-                        <label htmlFor="price" className="block text-sm font-medium text-text-light dark:text-text-dark mb-1">Price/Unit ($):</label>
+                        <label htmlFor="price" className="block text-sm font-medium text-text-light dark:text-text-dark mb-1">Price/Unit (₹):</label>
                         <input id="price" type="number" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} className="w-full px-3 py-2 text-sm border border-border-light dark:border-border-dark rounded-lg bg-background-light dark:bg-background-dark text-text-light dark:text-text-dark focus:outline-none focus:ring-2 focus:ring-primary" required />
                     </div>
                     <div>
@@ -316,10 +290,10 @@ function InvestmentsPage() {
                     <div key={tx.inv_transaction_id} className="flex justify-between items-center px-3 py-3 border-b border-border-light dark:border-border-dark rounded transition-colors border-l-4 mb-2" style={{borderLeftColor: tx.transaction_type === 'Buy' ? '#50E3C2' : '#E35050'}}>
                         <div className="flex flex-col flex-grow">
                             <span className="text-xs text-text-muted-light dark:text-text-muted-dark">{new Date(tx.transaction_date).toLocaleDateString()}</span>
-                            <span className="text-text-light dark:text-text-dark text-base">{tx.transaction_type} {parseFloat(tx.quantity).toFixed(4)} units @ ${parseFloat(tx.price_per_unit).toFixed(2)}</span>
+                            <span className="text-text-light dark:text-text-dark text-base">{tx.transaction_type} {parseFloat(tx.quantity).toFixed(4)} units @ ₹{parseFloat(tx.price_per_unit).toFixed(2)}</span>
                         </div>
                         <div className="ml-4 text-right">
-                            <span className="font-bold text-text-light dark:text-text-dark">${(parseFloat(tx.quantity) * parseFloat(tx.price_per_unit)).toFixed(2)}</span>
+                            <span className="font-bold text-text-light dark:text-text-dark">₹{(parseFloat(tx.quantity) * parseFloat(tx.price_per_unit)).toFixed(2)}</span>
                         </div>
                     </div>
                 ))}
@@ -345,10 +319,6 @@ function InvestmentsPage() {
             <h2 className="text-text-light dark:text-text-dark text-3xl font-bold mb-8 pb-4 border-b border-border-light dark:border-border-dark">Investment Tracker</h2>
 
             <div className="flex items-center gap-4 mb-8">
-                <label className="font-bold text-text-light dark:text-text-dark">View Profile:</label>
-                <select value={selectedProfile} onChange={(e) => setSelectedProfile(parseInt(e.target.value))} className="px-3 py-2 text-sm border border-border-light dark:border-border-dark rounded-lg bg-background-light dark:bg-background-dark text-text-light dark:text-text-dark focus:outline-none focus:ring-2 focus:ring-primary" disabled={personalProfiles.length === 0}>
-                    {personalProfiles.map(p => <option key={p.profile_id} value={p.profile_id}>{p.profile_name}</option>)}
-                </select>
                 {/* Tab Switcher */}
                 <div className="flex gap-1 ml-auto">
                     <button 

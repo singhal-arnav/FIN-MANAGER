@@ -3,14 +3,10 @@ import axios from 'axios';
 
 const API_URL = 'http://localhost:5000/api';
 
-function ClientsPage() {
-    const [profiles, setProfiles] = useState([]);
-    const [businessProfiles, setBusinessProfiles] = useState([]);
+function ClientsPage({ selectedProfile }) {
     const [clients, setClients] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-
-    const [selectedProfile, setSelectedProfile] = useState('');
 
     // Form state
     const [clientName, setClientName] = useState('');
@@ -40,41 +36,30 @@ function ClientsPage() {
 
     // Initial Data Fetching
     useEffect(() => {
+        if (!selectedProfile?.profile_id) {
+            setError('No profile selected. Please select a business profile.');
+            setLoading(false);
+            return;
+        }
+
+        if (selectedProfile.profile_type !== 'business') {
+            setError('Clients can only be added to business profiles.');
+            setLoading(false);
+            return;
+        }
+
         const fetchInitialData = async () => {
             try {
                 setLoading(true);
                 const token = localStorage.getItem('token');
-                const authHeaders = { headers: { 'Authorization': `Bearer ${token}` } };
-                
-                const profilesRes = await axios.get(`${API_URL}/profiles`, authHeaders);
-                const fetchedProfiles = profilesRes.data;
-
-                const business = fetchedProfiles.filter(p => p.profile_type === 'business');
-                setProfiles(fetchedProfiles);
-                setBusinessProfiles(business);
-
-                if (business.length > 0) {
-                    const defaultProfileId = business[0].profile_id;
-                    setSelectedProfile(defaultProfileId);
-                    await fetchClients(defaultProfileId, token);
-                } else {
-                    setError('No business profiles found. Clients can only be added to business profiles.');
-                    setLoading(false);
-                }
+                await fetchClients(selectedProfile.profile_id, token);
             } catch (err) {
-                setError('Failed to fetch initial data.');
+                setError('Failed to fetch clients.');
                 setLoading(false);
             }
         };
 
         fetchInitialData();
-    }, []);
-
-    // Rerun fetch when selectedProfile changes
-    useEffect(() => {
-        if (selectedProfile) {
-            fetchClients(selectedProfile);
-        }
     }, [selectedProfile]);
 
     // Handlers
@@ -82,8 +67,8 @@ function ClientsPage() {
         e.preventDefault();
         setFormError('');
 
-        if (!selectedProfile || !clientName) {
-            setFormError('Profile and Client Name are required.');
+        if (!selectedProfile?.profile_id || !clientName) {
+            setFormError('Client Name is required.');
             return;
         }
 
@@ -92,7 +77,7 @@ function ClientsPage() {
             const authHeaders = { headers: { 'Authorization': `Bearer ${token}` } };
             
             const body = {
-                profile_id: selectedProfile,
+                profile_id: selectedProfile.profile_id,
                 client_name: clientName,
                 email: email || null,
                 address: address || null,
@@ -100,7 +85,7 @@ function ClientsPage() {
 
             const response = await axios.post(`${API_URL}/clients`, body, authHeaders);
             
-            if (response.data.profile_id === selectedProfile) {
+            if (response.data.profile_id === selectedProfile.profile_id) {
                 setClients([response.data, ...clients]);
             }
             setClientName('');
@@ -129,21 +114,14 @@ function ClientsPage() {
 
     // Render Functions
     const renderClientForm = () => {
-        if (businessProfiles.length === 0) {
-            return <p className="text-negative text-sm text-center mb-4">Please create a **Business Profile** before adding clients.</p>;
+        if (!selectedProfile || selectedProfile.profile_type !== 'business') {
+            return <p className="text-negative text-sm text-center mb-4">Please select a Business Profile to add clients.</p>;
         }
         return (
             <form onSubmit={handleCreateClient} className="flex flex-col h-full">
                 <h3 className="text-text-light dark:text-text-dark text-lg font-semibold mb-4">Add New Client</h3>
                 {formError && <p className="text-negative text-sm text-center mb-4">{formError}</p>}
                 
-                <div className="mb-4">
-                    <label htmlFor="profileSelect" className="block text-sm font-medium text-text-light dark:text-text-dark mb-1">Business Profile:</label>
-                    <select id="profileSelect" value={selectedProfile} onChange={(e) => setSelectedProfile(parseInt(e.target.value))} className="w-full px-3 py-2 text-sm border border-border-light dark:border-border-dark rounded-lg bg-background-light dark:bg-background-dark text-text-light dark:text-text-dark focus:outline-none focus:ring-2 focus:ring-primary">
-                        {businessProfiles.map(p => <option key={p.profile_id} value={p.profile_id}>{p.profile_name}</option>)}
-                    </select>
-                </div>
-
                 <div className="mb-4">
                     <label htmlFor="clientName" className="block text-sm font-medium text-text-light dark:text-text-dark mb-1">Client Name:</label>
                     <input id="clientName" type="text" value={clientName} onChange={(e) => setClientName(e.target.value)} className="w-full px-3 py-2 text-sm border border-border-light dark:border-border-dark rounded-lg bg-background-light dark:bg-background-dark text-text-light dark:text-text-dark focus:outline-none focus:ring-2 focus:ring-primary" placeholder="e.g., Acme Corporation" required />
@@ -200,19 +178,12 @@ function ClientsPage() {
         <div className="w-full max-w-5xl mx-auto p-8">
             <h2 className="text-text-light dark:text-text-dark text-3xl font-bold mb-8 pb-4 border-b border-border-light dark:border-border-dark">Client Management</h2>
             
-            <div className="flex items-center gap-4 mb-8">
-                <label className="font-bold text-text-light dark:text-text-dark">View Profile:</label>
-                <select value={selectedProfile} onChange={(e) => setSelectedProfile(parseInt(e.target.value))} className="px-3 py-2 text-sm border border-border-light dark:border-border-dark rounded-lg bg-background-light dark:bg-background-dark text-text-light dark:text-text-dark focus:outline-none focus:ring-2 focus:ring-primary" disabled={businessProfiles.length === 0}>
-                    {businessProfiles.map(p => <option key={p.profile_id} value={p.profile_id}>{p.profile_name}</option>)}
-                </select>
-            </div>
-
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div className="flex flex-col gap-4 p-6 bg-card-light dark:bg-card-dark rounded-xl border border-border-light dark:border-border-dark">
                     {renderClientForm()}
                 </div>
                 <div className="flex flex-col gap-4 p-6 bg-card-light dark:bg-card-dark rounded-xl border border-border-light dark:border-border-dark">
-                    <h3 className="text-text-light dark:text-text-dark text-lg font-semibold">Clients for {profiles.find(p => p.profile_id === selectedProfile)?.profile_name || 'Selected Profile'}</h3>
+                    <h3 className="text-text-light dark:text-text-dark text-lg font-semibold">Clients for {selectedProfile?.profile_name || 'Selected Profile'}</h3>
                     {renderClientList()}
                 </div>
             </div>
