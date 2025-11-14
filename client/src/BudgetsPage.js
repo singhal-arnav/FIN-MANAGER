@@ -3,9 +3,8 @@ import axios from 'axios';
 
 const API_URL = 'http://localhost:5000/api';
 
-function BudgetsPage() {
+function BudgetsPage({ selectedProfile }) {
     const [budgets, setBudgets] = useState([]);
-    const [profiles, setProfiles] = useState([]);
     const [categories, setCategories] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(''); 
@@ -13,8 +12,7 @@ function BudgetsPage() {
     // State for filtering and form submission
     const now = new Date();
     const [year, setYear] = useState(now.getFullYear());
-    const [month, setMonth] = useState(now.getMonth() + 1); 
-    const [selectedProfile, setSelectedProfile] = useState('');
+    const [month, setMonth] = useState(now.getMonth() + 1);
 
     // Form state
     const [budgetAmount, setBudgetAmount] = useState('');
@@ -46,49 +44,33 @@ function BudgetsPage() {
 
     // --- Data Fetching (Initial Load and Dependencies) ---
     useEffect(() => {
+        if (!selectedProfile?.profile_id) {
+            setError('No profile selected.');
+            setLoading(false);
+            return;
+        }
+
         const fetchRequiredData = async () => {
             try {
                 setLoading(true);
                 const token = localStorage.getItem('token'); 
                 const authHeaders = { headers: { 'Authorization': `Bearer ${token}` } };
                 
-                // 1. Fetch Profiles first (to select default)
-                const profilesRes = await axios.get(`${API_URL}/profiles`, authHeaders);
-                const fetchedProfiles = profilesRes.data;
-                setProfiles(fetchedProfiles);
+                const categoriesRes = await axios.get(`${API_URL}/categories/profile/${selectedProfile.profile_id}`, authHeaders);
+                setCategories(categoriesRes.data);
 
-                // 2. Fetch Categories (was likely causing the silent crash)
-                const categoriesRes = await axios.get(`${API_URL}/categories`, authHeaders);
-                const fetchedCategories = categoriesRes.data;
-                setCategories(fetchedCategories);
-
-                // 3. Set Defaults and Trigger Budget Fetch
-                if (fetchedProfiles.length > 0) {
-                    const defaultProfileId = fetchedProfiles[0].profile_id;
-                    setSelectedProfile(defaultProfileId);
-                    // Initial fetch: The effect below will handle the first budget fetch once selectedProfile is set
+                if (categoriesRes.data.length > 0) {
+                    setSelectedCategory(categoriesRes.data[0].category_id);
                 }
 
-                if (fetchedCategories.length > 0) {
-                    setSelectedCategory(fetchedCategories[0].category_id);
-                }
-
+                fetchBudgets(selectedProfile.profile_id, year, month, token);
             } catch (err) {
-                // This catch handles errors from Profiles or Categories fetch
-                setError('Failed to fetch initial data (Profiles/Categories). Check backend endpoints.');
+                setError('Failed to fetch initial data.');
                 setLoading(false);
             }
         };
 
         fetchRequiredData();
-    }, []); // Only runs on mount
-
-    // --- Data Fetching (Rerun when filters change) ---
-    useEffect(() => {
-        // Runs fetch when selectedProfile is set (on initial load) or changes (via filter)
-        if (selectedProfile) {
-            fetchBudgets(selectedProfile, year, month);
-        }
     }, [selectedProfile, year, month]);
 
 
@@ -97,8 +79,8 @@ function BudgetsPage() {
         e.preventDefault();
         setFormError('');
 
-        if (!selectedProfile || !selectedCategory || !budgetAmount || isNaN(parseFloat(budgetAmount))) {
-            setFormError('Please select a profile, category, and enter a valid amount.');
+        if (!selectedProfile?.profile_id || !selectedCategory || !budgetAmount || isNaN(parseFloat(budgetAmount))) {
+            setFormError('Please select a category and enter a valid amount.');
             return;
         }
 
@@ -107,7 +89,7 @@ function BudgetsPage() {
             const authHeaders = { headers: { 'Authorization': `Bearer ${token}` } };
             
             const body = {
-                profile_id: selectedProfile,
+                profile_id: selectedProfile.profile_id,
                 category_id: selectedCategory,
                 budget: parseFloat(budgetAmount),
                 month: month,
@@ -116,9 +98,8 @@ function BudgetsPage() {
 
             const response = await axios.post(`${API_URL}/budgets`, body, authHeaders);
             
-            // Re-fetch data to get the calculated spent amount
-            if (response.data.profile_id === selectedProfile) {
-                fetchBudgets(selectedProfile, year, month, token); 
+            if (response.data.profile_id === selectedProfile.profile_id) {
+                fetchBudgets(selectedProfile.profile_id, year, month, token); 
             }
             setBudgetAmount('');
             
@@ -152,14 +133,6 @@ function BudgetsPage() {
                 {formError && <p className="text-negative text-sm text-center mb-4">{formError}</p>}
                 
                 <div className="mb-4">
-                    <label htmlFor="profileSelect" className="block text-sm font-medium text-text-light dark:text-text-dark mb-1">Profile:</label>
-                    <select id="profileSelect" value={selectedProfile} onChange={(e) => setSelectedProfile(parseInt(e.target.value))} 
-                        className="w-full px-3 py-2 text-sm border border-border-light dark:border-border-dark rounded-lg bg-background-light dark:bg-background-dark text-text-light dark:text-text-dark focus:outline-none focus:ring-2 focus:ring-primary">
-                        {profiles.map(p => <option key={p.profile_id} value={p.profile_id}>{p.profile_name}</option>)}
-                    </select>
-                </div>
-                
-                <div className="mb-4">
                     <label htmlFor="categorySelect" className="block text-sm font-medium text-text-light dark:text-text-dark mb-1">Category:</label>
                     <select id="categorySelect" value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)} 
                         className="w-full px-3 py-2 text-sm border border-border-light dark:border-border-dark rounded-lg bg-background-light dark:bg-background-dark text-text-light dark:text-text-dark focus:outline-none focus:ring-2 focus:ring-primary">
@@ -168,7 +141,7 @@ function BudgetsPage() {
                 </div>
 
                 <div className="mb-4">
-                    <label htmlFor="budgetAmount" className="block text-sm font-medium text-text-light dark:text-text-dark mb-1">Monthly Limit ($):</label>
+                    <label htmlFor="budgetAmount" className="block text-sm font-medium text-text-light dark:text-text-dark mb-1">Monthly Limit (₹):</label>
                     <input id="budgetAmount" type="number" step="0.01" value={budgetAmount} onChange={(e) => setBudgetAmount(e.target.value)} 
                         className="w-full px-3 py-2 text-sm border border-border-light dark:border-border-dark rounded-lg bg-background-light dark:bg-background-dark text-text-light dark:text-text-dark focus:outline-none focus:ring-2 focus:ring-primary" 
                         placeholder="500.00" />
@@ -180,7 +153,7 @@ function BudgetsPage() {
     };
 
     const renderBudgetList = () => {
-        const budgetsForSelectedProfile = budgets.filter(b => b.profile_id === selectedProfile);
+        const budgetsForSelectedProfile = budgets.filter(b => b.profile_id === selectedProfile?.profile_id);
 
         if (budgetsForSelectedProfile.length === 0) {
             return <p className="text-text-muted-light dark:text-text-muted-dark">No budgets set up for {new Date(year, month - 1).toLocaleString('default', { month: 'long', year: 'numeric' })} under this profile.</p>;
@@ -219,9 +192,9 @@ function BudgetsPage() {
                                 </div>
                                 
                                 <div className="flex flex-col">
-                                    <span className="text-xs text-text-muted-light dark:text-text-muted-dark">Limit: ${limit.toFixed(2)} | Spent: ${spent.toFixed(2)}</span>
+                                    <span className="text-xs text-text-muted-light dark:text-text-muted-dark">Limit: ₹{limit.toFixed(2)} | Spent: ₹{spent.toFixed(2)}</span>
                                     <span className={`font-bold mt-1 flex items-center ${isExceeded ? 'text-negative' : 'text-positive'}`}>
-                                        {isExceeded ? `OVERSPENT: $${Math.abs(remaining).toFixed(2)}` : `Remaining: $${remaining.toFixed(2)}`}
+                                        {isExceeded ? `OVERSPENT: ₹${Math.abs(remaining).toFixed(2)}` : `Remaining: ₹${remaining.toFixed(2)}`}
                                         <button onClick={() => handleDeleteBudget(budget.budget_id)} 
                                             className="ml-2 text-negative text-xl font-bold hover:text-negative/80 transition-colors">&times;</button>
                                     </span>
@@ -257,10 +230,6 @@ function BudgetsPage() {
             
             {/* Filter Controls */}
             <div className="flex gap-4 mb-8 items-center">
-                <select value={selectedProfile} onChange={(e) => setSelectedProfile(parseInt(e.target.value))} 
-                    className="px-3 py-2 text-sm border border-border-light dark:border-border-dark rounded-lg bg-background-light dark:bg-background-dark text-text-light dark:text-text-dark focus:outline-none focus:ring-2 focus:ring-primary">
-                    {profiles.map(p => <option key={p.profile_id} value={p.profile_id}>{p.profile_name}</option>)}
-                </select>
                 <select value={month} onChange={(e) => setMonth(parseInt(e.target.value))} 
                     className="px-3 py-2 text-sm border border-border-light dark:border-border-dark rounded-lg bg-background-light dark:bg-background-dark text-text-light dark:text-text-dark focus:outline-none focus:ring-2 focus:ring-primary">
                     {monthOptions.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}

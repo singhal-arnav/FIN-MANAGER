@@ -22,12 +22,9 @@ const createInvestment = async (req, res) => {
             return res.status(400).json({ message: 'Profile ID and investment name are required' });
         }
 
-        const [profiles] = await db.query('SELECT user_id, profile_type FROM Profiles WHERE profile_id = ?', [profile_id]);
+        const [profiles] = await db.query('SELECT user_id FROM Profiles WHERE profile_id = ?', [profile_id]);
         if (profiles.length === 0 || profiles[0].user_id !== req.user.user_id) {
             return res.status(401).json({ message: 'Not authorized' });
-        }
-        if (profiles[0].profile_type !== 'personal') {
-            return res.status(403).json({ message: 'Investments can only be added to personal profiles.' });
         }
 
         const [newInvestment] = await db.query(

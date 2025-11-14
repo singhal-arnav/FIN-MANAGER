@@ -1,64 +1,82 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 const API_URL = 'http://localhost:5000/api';
 
-function Dashboard({ userEmail }) {
-    const [profiles, setProfiles] = useState([]);
+function Dashboard({ userEmail, selectedProfile }) {
     const [accounts, setAccounts] = useState([]);
     const [netWorth, setNetWorth] = useState(0);
+    const [netWorthHistory, setNetWorthHistory] = useState([]);
     const [recentTransactions, setRecentTransactions] = useState([]);
     const [categories, setCategories] = useState([]);
     const [budgets, setBudgets] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
 
-    useEffect(() => {
-        const fetchDashboardData = async () => {
-            try {
-                setLoading(true);
-                const token = localStorage.getItem('token');
-                const authHeaders = { headers: { 'Authorization': `Bearer ${token}` } };
-                
-                const [profilesRes, accountsRes, netWorthRes, transactionsRes, categoriesRes] = await Promise.all([
-                    axios.get(`${API_URL}/profiles`, authHeaders),
-                    axios.get(`${API_URL}/accounts`, authHeaders),
-                    axios.get(`${API_URL}/summary/net-worth`, authHeaders),
-                    axios.get(`${API_URL}/transactions?limit=5`, authHeaders),
-                    axios.get(`${API_URL}/categories`, authHeaders)
-                ]);
-
-                setProfiles(profilesRes.data);
-                setAccounts(accountsRes.data);
-                setNetWorth(netWorthRes.data.net_worth || 0);
-                setRecentTransactions(transactionsRes.data || []);
-                setCategories(categoriesRes.data || []);
-
-                // Fetch budgets for the current month
-                if (profilesRes.data.length > 0) {
-                    const now = new Date();
-                    const currentYear = now.getFullYear();
-                    const currentMonth = now.getMonth() + 1;
-                    try {
-                        const budgetsRes = await axios.get(
-                            `${API_URL}/budgets/profile/${profilesRes.data[0].profile_id}/${currentYear}/${currentMonth}`,
-                            authHeaders
-                        );
-                        setBudgets(budgetsRes.data || []);
-                    } catch (budgetErr) {
-                        // Silently fail if no budgets exist
-                        setBudgets([]);
-                    }
-                }
-            } catch (err) {
-                setError('Could not fetch dashboard data. Please try again later.');
-            } finally {
+    const fetchDashboardData = useCallback(async () => {
+        try {
+            setLoading(true);
+            const token = localStorage.getItem('token');
+            const authHeaders = { headers: { 'Authorization': `Bearer ${token}` } };
+            if (!selectedProfile?.profile_id) {
+                setError('No profile selected.');
                 setLoading(false);
+                return;
+            }
+
+            const profileId = selectedProfile.profile_id;
+
+            const [accountsRes, transactionsRes, categoriesRes, netWorthHistoryRes] = await Promise.all([
+                axios.get(`${API_URL}/accounts/profile/${profileId}`, authHeaders),
+                axios.get(`${API_URL}/transactions/profile/${profileId}?limit=5`, authHeaders),
+                axios.get(`${API_URL}/categories/profile/${profileId}`, authHeaders),
+                axios.get(`${API_URL}/accounts/profile/${profileId}/net-worth-history?days=30`, authHeaders).catch(() => ({ data: [] }))
+            ]);
+
+            const fetchedAccounts = accountsRes.data || [];
+            setAccounts(fetchedAccounts);
+            const computedNetWorth = fetchedAccounts.reduce((sum, a) => sum + (parseFloat(a.balance) || 0), 0);
+            setNetWorth(computedNetWorth);
+            setRecentTransactions(transactionsRes.data || []);
+            setCategories(categoriesRes.data || []);
+            setNetWorthHistory(netWorthHistoryRes.data || []);
+
+            const now = new Date();
+            const currentYear = now.getFullYear();
+            const currentMonth = now.getMonth() + 1;
+            try {
+                const budgetsRes = await axios.get(
+                    `${API_URL}/budgets/profile/${profileId}/${currentYear}/${currentMonth}`,
+                    authHeaders
+                );
+                setBudgets(budgetsRes.data || []);
+            } catch (budgetErr) {
+                setBudgets([]);
+            }
+        } catch (err) {
+            setError('Could not fetch dashboard data. Please try again later.');
+        } finally {
+            setLoading(false);
+        }
+    }, [selectedProfile?.profile_id]);
+
+    useEffect(() => {
+        fetchDashboardData();
+
+        // Listen for transaction updates to refresh dashboard
+        const handleTransactionUpdate = () => {
+            if (selectedProfile?.profile_id) {
+                fetchDashboardData();
             }
         };
-        fetchDashboardData();
-    }, []);
+        window.addEventListener('transactionUpdated', handleTransactionUpdate);
+
+        return () => {
+            window.removeEventListener('transactionUpdated', handleTransactionUpdate);
+        };
+    }, [selectedProfile, fetchDashboardData]);
 
     if (loading) return (
         <div className="flex items-center justify-center h-full">
@@ -97,6 +115,21 @@ function Dashboard({ userEmail }) {
         if (name.includes('income') || name.includes('salary') || name.includes('paycheck')) return 'work';
         return 'shopping_cart';
     };
+
+    // Check if dark mode is active (using a helper function that runs on render)
+    const getChartColors = () => {
+        // Check if dark mode class exists on html element
+        const isDark = document.documentElement.classList.contains('dark');
+        return {
+            gridColor: isDark ? '#2C3E50' : 'rgba(224, 230, 237, 0.5)',
+            textColor: isDark ? '#A0B3C6' : '#617589',
+            tooltipBg: isDark ? '#192734' : '#FFFFFF',
+            tooltipBorder: isDark ? '#2C3E50' : '#E0E6ED',
+            tooltipText: isDark ? '#E0E6ED' : '#333333'
+        };
+    };
+    
+    const chartColors = getChartColors();
     
     return (
         <div className="flex-1 p-8">
@@ -125,7 +158,7 @@ function Dashboard({ userEmail }) {
                             <div>
                                 <p className="text-text-light dark:text-text-dark text-base font-medium">Total Net Worth</p>
                                 <p className="text-text-light dark:text-text-dark text-4xl font-bold mt-1">
-                                    ${netWorth.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    ₹{netWorth.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </p>
                             </div>
                             <div className="flex gap-1 items-center">
@@ -133,29 +166,55 @@ function Dashboard({ userEmail }) {
                                 <span className="material-symbols-outlined text-positive text-xl">trending_up</span>
                             </div>
                         </div>
-                        {/* Simple bar chart showing account balances */}
+                        {/* Net Worth Over Time Graph */}
                         <div className="flex min-h-[180px] flex-1 flex-col justify-end mt-4">
-                            {accounts.length > 0 ? (
-                                <div className="flex items-end gap-2 h-full">
-                                    {accounts.slice(0, 8).map(account => {
-                                        const accountBalance = parseFloat(account.balance) || 0;
-                                        const balances = accounts.map(a => Math.abs(parseFloat(a.balance) || 0));
-                                        const maxBalance = Math.max(...balances);
-                                        const height = maxBalance > 0 ? (Math.abs(accountBalance) / maxBalance) * 100 : 0;
-                                        return (
-                                            <div key={account.account_id} className="flex-1 flex flex-col items-center">
-                                                <div 
-                                                    className="w-full bg-primary rounded-t-lg transition-all hover:opacity-80"
-                                                    style={{ height: `${height}%` }}
-                                                    title={`${account.name}: $${accountBalance.toFixed(2)}`}
-                                                ></div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
+                            {netWorthHistory.length > 0 ? (
+                                <ResponsiveContainer width="100%" height={180}>
+                                    <LineChart data={netWorthHistory} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+                                        <defs>
+                                            <linearGradient id="netWorthGradient" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="5%" stopColor="#4A90E2" stopOpacity={0.3}/>
+                                                <stop offset="95%" stopColor="#4A90E2" stopOpacity={0}/>
+                                            </linearGradient>
+                                        </defs>
+                                        <CartesianGrid 
+                                            strokeDasharray="3 3" 
+                                            stroke={chartColors.gridColor}
+                                        />
+                                        <XAxis 
+                                            dataKey="label" 
+                                            stroke={chartColors.textColor}
+                                            style={{ fontSize: '11px' }}
+                                            tick={{ fill: chartColors.textColor }}
+                                        />
+                                        <YAxis 
+                                            stroke={chartColors.textColor}
+                                            style={{ fontSize: '11px' }}
+                                            tick={{ fill: chartColors.textColor }}
+                                            tickFormatter={(value) => `₹${(value / 1000).toFixed(0)}k`}
+                                        />
+                                        <Tooltip 
+                                            contentStyle={{ 
+                                                backgroundColor: chartColors.tooltipBg,
+                                                border: `1px solid ${chartColors.tooltipBorder}`,
+                                                borderRadius: '8px',
+                                                color: chartColors.tooltipText
+                                            }}
+                                            formatter={(value) => [`₹${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 'Net Worth']}
+                                        />
+                                        <Line 
+                                            type="monotone" 
+                                            dataKey="netWorth" 
+                                            stroke="#4A90E2" 
+                                            strokeWidth={2}
+                                            dot={{ fill: '#4A90E2', r: 3 }}
+                                            activeDot={{ r: 5, fill: '#4A90E2' }}
+                                        />
+                                    </LineChart>
+                                </ResponsiveContainer>
                             ) : (
                                 <div className="text-text-muted-light dark:text-text-muted-dark text-sm text-center py-8">
-                                    Add accounts to see a visual breakdown
+                                    Add transactions to see net worth over time
                                 </div>
                             )}
                         </div>
@@ -194,7 +253,7 @@ function Dashboard({ userEmail }) {
                                         </div>
                                         <div className="text-right">
                                             <p className={`font-semibold ${tx.type === 'income' ? 'text-positive' : 'text-negative'}`}>
-                                                {tx.type === 'income' ? '+' : '-'}${parseFloat(tx.amount).toFixed(2)}
+                                                {tx.type === 'income' ? '+' : '-'}₹{parseFloat(tx.amount).toFixed(2)}
                                             </p>
                                             <p className="text-text-muted-light dark:text-text-muted-dark text-sm">
                                                 {new Date(tx.time_stamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
@@ -243,7 +302,7 @@ function Dashboard({ userEmail }) {
                                                 ? 'text-text-light dark:text-text-dark' 
                                                 : 'text-negative'
                                         }`}>
-                                            ${Math.abs(account.balance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            ₹{Math.abs(account.balance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                         </p>
                                     </div>
                                 ))}
@@ -286,7 +345,7 @@ function Dashboard({ userEmail }) {
                                         <div className="absolute inset-0 flex flex-col items-center justify-center">
                                             <p className="text-text-muted-light dark:text-text-muted-dark text-sm">Total Spent</p>
                                             <p className="text-text-light dark:text-text-dark text-xl font-bold">
-                                                ${totalSpent.toFixed(0)}
+                                                ₹{totalSpent.toFixed(0)}
                                             </p>
                                         </div>
                                     </div>
@@ -329,7 +388,7 @@ function Dashboard({ userEmail }) {
                                             <div className="flex justify-between text-sm mb-1">
                                                 <p className="font-medium text-text-light dark:text-text-dark">{category?.name || 'Unknown'}</p>
                                                 <p className="text-text-muted-light dark:text-text-muted-dark">
-                                                    ${spent.toFixed(0)} / ${limit.toFixed(0)}
+                                                    ₹{spent.toFixed(0)} / ₹{limit.toFixed(0)}
                                                 </p>
                                             </div>
                                             <div className="w-full bg-background-light dark:bg-background-dark rounded-full h-2">

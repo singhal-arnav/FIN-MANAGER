@@ -25,8 +25,15 @@ app.use('/api/investment-transactions', require('./routes/investmentTransactions
 
 app.use('/api/recurring-transactions', require('./routes/recurringTransactions'));
 
+// NEW: Business profile routes
+app.use('/api/clients', require('./routes/clients'));
+app.use('/api/invoices', require('./routes/invoices'));
+
+// NEW: Notifications route
+app.use('/api/notifications', require('./routes/notifications'));
+
 app.use('/api/summary', require('./routes/summary'));
-//just to test
+
 app.get('/', (req, res) => {
     res.send('Financial Manager API is running...');
 });
@@ -36,4 +43,3 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
-

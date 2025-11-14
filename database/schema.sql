@@ -1,7 +1,6 @@
-
-DROP DATABASE IF EXISTS PFMS;
-CREATE DATABASE PFMS;
-USE PFMS;
+DROP DATABASE IF EXISTS Finance_Manager;
+CREATE DATABASE Finance_Manager;
+USE Finance_Manager;
 
 -- =============================================
 -- SECTION 1: CORE TABLES (User Login & Profile Management)
@@ -65,7 +64,8 @@ CREATE TABLE Categories (
     name                VARCHAR(50) NOT NULL,
     parent_category_id  INT         NULL,
     FOREIGN KEY (profile_id) REFERENCES Profiles(profile_id) ON DELETE CASCADE,
-    FOREIGN KEY (parent_category_id) REFERENCES Categories(category_id) ON DELETE SET NULL
+    FOREIGN KEY (parent_category_id) REFERENCES Categories(category_id) ON DELETE SET NULL,
+    UNIQUE(profile_id, name)
 );
 
 -- Transactions Table: All income/expense records, linked to an account.
@@ -122,7 +122,8 @@ CREATE TABLE Financial_Goals (
     current_amount  DECIMAL(15, 2)  NOT NULL DEFAULT 0.00,
     target_date     DATE,
     status          ENUM('In Progress', 'Achieved', 'Cancelled') NOT NULL DEFAULT 'In Progress',
-    FOREIGN KEY (profile_id) REFERENCES Profiles(profile_id) ON DELETE CASCADE
+    FOREIGN KEY (profile_id) REFERENCES Profiles(profile_id) ON DELETE CASCADE,
+    UNIQUE(profile_id, goal_name, target_amount, target_date)
 );
 
 CREATE TABLE Investments (
@@ -136,11 +137,13 @@ CREATE TABLE Investments (
 CREATE TABLE Investment_Transactions (
     inv_transaction_id  INT             PRIMARY KEY AUTO_INCREMENT,
     investment_id       INT             NOT NULL,
+    account_id          INT             NOT NULL,
     transaction_type    ENUM('Buy', 'Sell') NOT NULL,
     quantity            DECIMAL(18, 8)  NOT NULL,
     price_per_unit      DECIMAL(15, 2)  NOT NULL,
     transaction_date    DATE            NOT NULL,
-    FOREIGN KEY (investment_id) REFERENCES Investments(investment_id) ON DELETE CASCADE
+    FOREIGN KEY (investment_id) REFERENCES Investments(investment_id) ON DELETE CASCADE,
+    FOREIGN KEY (account_id) REFERENCES Accounts(account_id) ON DELETE CASCADE
 );
 
 -- =============================================
@@ -173,12 +176,12 @@ CREATE TABLE Invoices (
 -- SECTION 5: UTILITY TABLE (Notifications)
 -- =============================================
 
--- Notifications are linked to the user, not the profile.
+-- Notifications are linked to the profile, making them profile-specific.
 CREATE TABLE Notifications (
     notification_id INT             PRIMARY KEY AUTO_INCREMENT,
-    user_id         INT             NOT NULL,
+    profile_id      INT             NOT NULL,
     message         TEXT            NOT NULL,
     is_read         BOOLEAN         NOT NULL DEFAULT FALSE,
     created_at      TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES Users(user_id) ON DELETE CASCADE
+    FOREIGN KEY (profile_id) REFERENCES Profiles(profile_id) ON DELETE CASCADE
 );

@@ -25,12 +25,9 @@ const createGoal = async (req, res) => {
             return res.status(400).json({ message: 'Profile ID, goal name, and target amount are required' });
         }
 
-        const [profiles] = await db.query('SELECT user_id, profile_type FROM Profiles WHERE profile_id = ?', [profile_id]);
+        const [profiles] = await db.query('SELECT user_id FROM Profiles WHERE profile_id = ?', [profile_id]);
         if (profiles.length === 0 || profiles[0].user_id !== req.user.user_id) {
             return res.status(401).json({ message: 'Not authorized' });
-        }
-        if (profiles[0].profile_type !== 'personal') {
-            return res.status(403).json({ message: 'Financial goals can only be added to personal profiles.' });
         }
 
         const [newGoal] = await db.query(
@@ -40,6 +37,9 @@ const createGoal = async (req, res) => {
         const [createdGoal] = await db.query('SELECT * FROM Financial_Goals WHERE goal_id = ?', [newGoal.insertId]);
         res.status(201).json(createdGoal[0]);
     } catch (error) {
+        if (error.code === 'ER_DUP_ENTRY') {
+            return res.status(400).json({ message: 'A goal with the same name, target amount, and target date already exists for this profile.' });
+        }
         console.error(error);
         res.status(500).json({ message: 'Server Error' });
     }
@@ -72,6 +72,9 @@ const updateGoal = async (req, res) => {
         const [updatedGoal] = await db.query('SELECT * FROM Financial_Goals WHERE goal_id = ?', [goalId]);
         res.status(200).json(updatedGoal[0]);
     } catch (error) {
+        if (error.code === 'ER_DUP_ENTRY') {
+            return res.status(400).json({ message: 'A goal with the same name, target amount, and target date already exists for this profile.' });
+        }
         console.error(error);
         res.status(500).json({ message: 'Server Error' });
     }

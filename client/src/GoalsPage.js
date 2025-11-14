@@ -3,15 +3,10 @@ import axios from 'axios';
 
 const API_URL = 'http://localhost:5000/api';
 
-function GoalsPage() {
+function GoalsPage({ selectedProfile }) {
     const [goals, setGoals] = useState([]);
-    const [profiles, setProfiles] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-
-    // State for filtering and form submission
-    const [selectedProfile, setSelectedProfile] = useState('');
-    const [personalProfiles, setPersonalProfiles] = useState([]);
 
     // Goal Form state
     const [goalName, setGoalName] = useState('');
@@ -47,42 +42,24 @@ function GoalsPage() {
 
     // --- Initial Data Fetching ---
     useEffect(() => {
+        if (!selectedProfile?.profile_id) {
+            setError('No profile selected. Please select a profile.');
+            setLoading(false);
+            return;
+        }
+
         const fetchRequiredData = async () => {
             try {
                 setLoading(true);
                 const token = localStorage.getItem('token'); 
-                const authHeaders = { headers: { 'Authorization': `Bearer ${token}` } };
-                
-                const profilesRes = await axios.get(`${API_URL}/profiles`, authHeaders);
-                const fetchedProfiles = profilesRes.data;
-
-                const personal = fetchedProfiles.filter(p => p.profile_type === 'personal');
-                setProfiles(fetchedProfiles);
-                setPersonalProfiles(personal);
-
-                if (personal.length > 0) {
-                    const defaultProfileId = personal[0].profile_id;
-                    setSelectedProfile(defaultProfileId); 
-                    await fetchGoals(defaultProfileId, token); 
-                } else {
-                    setError('No personal profiles found. Goals can only be added to personal profiles.');
-                    setLoading(false);
-                }
-
+                await fetchGoals(selectedProfile.profile_id, token); 
             } catch (err) {
-                setError('Failed to fetch initial profile data.'); 
+                setError('Failed to fetch goals.'); 
                 setLoading(false);
             }
         };
 
         fetchRequiredData();
-    }, []); 
-
-    // --- Rerun fetch when the selected profile changes ---
-    useEffect(() => {
-        if (selectedProfile) {
-            fetchGoals(selectedProfile);
-        }
     }, [selectedProfile]);
 
     // --- Goal Handlers ---
@@ -133,8 +110,8 @@ function GoalsPage() {
         e.preventDefault();
         setFormError('');
 
-        if (!selectedProfile || !goalName || !targetAmount || isNaN(parseFloat(targetAmount))) {
-            setFormError('Goal Name, Target Amount, and a Personal Profile are required.');
+        if (!selectedProfile?.profile_id || !goalName || !targetAmount || isNaN(parseFloat(targetAmount))) {
+            setFormError('Goal Name and Target Amount are required.');
             return;
         }
 
@@ -145,7 +122,7 @@ function GoalsPage() {
             const sanitizedTargetDate = targetDate.trim() === '' ? null : targetDate;
             
             const body = {
-                profile_id: parseInt(selectedProfile),
+                profile_id: selectedProfile.profile_id,
                 goal_name: goalName,
                 target_amount: parseFloat(targetAmount),
                 target_date: sanitizedTargetDate, 
@@ -153,7 +130,7 @@ function GoalsPage() {
 
             const response = await axios.post(`${API_URL}/financial-goals`, body, authHeaders); 
             
-            if (response.data.profile_id === selectedProfile) {
+            if (response.data.profile_id === selectedProfile.profile_id) {
                 setGoals([...goals, response.data]);
             }
             setGoalName('');
@@ -185,8 +162,8 @@ function GoalsPage() {
 
     // --- Render Functions ---
     const renderGoalForm = () => {
-        if (personalProfiles.length === 0) {
-            return <p className="text-negative text-sm text-center mb-4">Please create a **Personal Profile** before setting goals. You can do this via the sidebar.</p>;
+        if (!selectedProfile) {
+            return <p className="text-negative text-sm text-center mb-4">Please select a profile to set goals.</p>;
         }
         return (
             <form onSubmit={handleCreateGoal} className="flex flex-col h-full">
@@ -194,19 +171,12 @@ function GoalsPage() {
                 {formError && <p className="text-negative text-sm text-center mb-4">{formError}</p>}
                 
                 <div className="mb-4">
-                    <label htmlFor="profileSelect" className="block text-sm font-medium text-text-light dark:text-text-dark mb-1">Goal For Profile:</label>
-                    <select id="profileSelect" value={selectedProfile} onChange={(e) => setSelectedProfile(parseInt(e.target.value))} className="w-full px-3 py-2 text-sm border border-border-light dark:border-border-dark rounded-lg bg-background-light dark:bg-background-dark text-text-light dark:text-text-dark focus:outline-none focus:ring-2 focus:ring-primary">
-                        {personalProfiles.map(p => <option key={p.profile_id} value={p.profile_id}>{p.profile_name}</option>)}
-                    </select>
-                </div>
-
-                <div className="mb-4">
                     <label htmlFor="goalName" className="block text-sm font-medium text-text-light dark:text-text-dark mb-1">Goal Name:</label>
                     <input id="goalName" type="text" value={goalName} onChange={(e) => setGoalName(e.target.value)} className="w-full px-3 py-2 text-sm border border-border-light dark:border-border-dark rounded-lg bg-background-light dark:bg-background-dark text-text-light dark:text-text-dark focus:outline-none focus:ring-2 focus:ring-primary" placeholder="e.g., Down Payment, New Car Fund" required />
                 </div>
                 
                 <div className="mb-4">
-                    <label htmlFor="targetAmount" className="block text-sm font-medium text-text-light dark:text-text-dark mb-1">Target Amount ($):</label>
+                    <label htmlFor="targetAmount" className="block text-sm font-medium text-text-light dark:text-text-dark mb-1">Target Amount (₹):</label>
                     <input id="targetAmount" type="number" step="0.01" value={targetAmount} onChange={(e) => setTargetAmount(e.target.value)} className="w-full px-3 py-2 text-sm border border-border-light dark:border-border-dark rounded-lg bg-background-light dark:bg-background-dark text-text-light dark:text-text-dark focus:outline-none focus:ring-2 focus:ring-primary" placeholder="10000.00" required />
                 </div>
                 
@@ -250,7 +220,7 @@ function GoalsPage() {
                                 </div>
                                 <div className="flex justify-between text-xs font-medium mb-2">
                                     <span style={{color: statusColor}}>{Math.min(progress, 100).toFixed(1)}% Saved</span>
-                                    <span className="text-text-muted-light dark:text-text-muted-dark">${saved.toFixed(2)} / ${target.toFixed(2)}</span>
+                                    <span className="text-text-muted-light dark:text-text-muted-dark">₹{saved.toFixed(2)} / ₹{target.toFixed(2)}</span>
                                 </div>
 
                                 {/* CONTRIBUTION FORM */}
@@ -300,14 +270,6 @@ function GoalsPage() {
         <div className="w-full max-w-5xl mx-auto p-8">
             <h2 className="text-text-light dark:text-text-dark text-3xl font-bold mb-8 pb-4 border-b border-border-light dark:border-border-dark">Financial Goals Tracker</h2>
             
-            {/* Filter Controls */}
-            <div className="flex items-center gap-4 mb-8">
-                <label className="font-bold text-text-light dark:text-text-dark">View Profile:</label>
-                <select value={selectedProfile} onChange={(e) => setSelectedProfile(parseInt(e.target.value))} className="px-3 py-2 text-sm border border-border-light dark:border-border-dark rounded-lg bg-background-light dark:bg-background-dark text-text-light dark:text-text-dark focus:outline-none focus:ring-2 focus:ring-primary" disabled={personalProfiles.length === 0}>
-                    {personalProfiles.map(p => <option key={p.profile_id} value={p.profile_id}>{p.profile_name}</option>)}
-                </select>
-            </div>
-
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {/* Goal Creation Form */}
                 <div className="flex flex-col gap-4 p-6 bg-card-light dark:bg-card-dark rounded-xl border border-border-light dark:border-border-dark">
@@ -316,7 +278,7 @@ function GoalsPage() {
 
                 {/* Existing Goals List */}
                 <div className="flex flex-col gap-4 p-6 bg-card-light dark:bg-card-dark rounded-xl border border-border-light dark:border-border-dark">
-                    <h3 className="text-text-light dark:text-text-dark text-lg font-semibold">Goals for {profiles.find(p => p.profile_id === selectedProfile)?.profile_name || 'Selected Profile'}</h3>
+                    <h3 className="text-text-light dark:text-text-dark text-lg font-semibold">Goals for {selectedProfile?.profile_name || 'Selected Profile'}</h3>
                     {renderGoalList()}
                 </div>
             </div>

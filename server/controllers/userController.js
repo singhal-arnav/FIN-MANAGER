@@ -17,7 +17,7 @@ const registerUser = async (req, res) => {
         // 2. Check if user already exists
         const [userExists] = await db.query('SELECT * FROM Users WHERE email = ?', [email]);
         if (userExists.length > 0) {
-            return res.status(400).json({ message: 'User already exists' });
+            return res.status(400).json({ message: 'A user with this email address already exists. Please use a different email.' });
         }
 
         // 3. Hash the password for security
@@ -43,6 +43,9 @@ const registerUser = async (req, res) => {
             res.status(400).json({ message: 'Invalid user data' });
         }
     } catch (error) {
+        if (error.code === 'ER_DUP_ENTRY') {
+            return res.status(400).json({ message: 'A user with this email address already exists. Please use a different email.' });
+        }
         console.error(error);
         res.status(500).json({ message: 'Server error during registration' });
     }

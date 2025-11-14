@@ -47,8 +47,37 @@ const getTransactionsByAccount = async (req, res) => {
     }
 };
 
+const getTransactionsByProfile = async (req, res) => {
+    try {
+        const { profileId } = req.params;
+        const limit = parseInt(req.query.limit) || 10;
+
+        const [profiles] = await db.query('SELECT user_id FROM Profiles WHERE profile_id = ?', [profileId]);
+        if (profiles.length === 0 || profiles[0].user_id !== req.user.user_id) {
+            return res.status(401).json({ message: 'Not authorized to view these transactions' });
+        }
+
+        const [transactions] = await db.query(
+            'SELECT T.*, C.name as category_name, A.name as account_name ' +
+            'FROM Transactions T ' +
+            'JOIN Accounts A ON T.account_id = A.account_id ' +
+            'LEFT JOIN Categories C ON T.category_id = C.category_id ' +
+            'WHERE A.profile_id = ? ' +
+            'ORDER BY T.time_stamp DESC ' +
+            'LIMIT ?',
+            [profileId, limit]
+        );
+
+        res.status(200).json(transactions);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server Error' });
+    }
+};
+
 const createTransaction = async (req, res) => {
     try {
+        console.log('=== createTransaction called ===', { body: req.body });
         const { account_id, type, amount, description, category_id, payment_method_id } = req.body;
 
         if (!account_id || !type || !amount || !category_id || !payment_method_id) {
@@ -75,7 +104,48 @@ const createTransaction = async (req, res) => {
             return res.status(400).json({ message: 'Invalid transaction type' });
         }
 
-        await db.query('UPDATE Accounts SET balance = ? WHERE account_id = ?', [newBalance, account_id]);
+        // Validate newBalance
+        if (isNaN(newBalance) || !isFinite(newBalance)) {
+            console.error('Invalid balance calculation:', { accountBalance: account.balance, amount, type, newBalance });
+            return res.status(400).json({ message: 'Invalid balance calculation' });
+        }
+
+        console.log('Updating account balance:', { account_id, currentBalance: account.balance, amount, type, newBalance });
+
+        // Update account balance
+        const updateQueryResult = await db.query('UPDATE Accounts SET balance = ? WHERE account_id = ?', [newBalance, account_id]);
+        const updateResult = updateQueryResult[0];
+        
+        console.log('Update query result:', JSON.stringify(updateQueryResult, null, 2));
+        console.log('Update result:', { updateResult, affectedRows: updateResult?.affectedRows, changedRows: updateResult?.changedRows });
+        
+        // Verify the update succeeded
+        if (!updateResult || updateResult.affectedRows === 0) {
+            console.error('Failed to update account balance:', { account_id, newBalance, updateResult, fullResult: updateQueryResult });
+            return res.status(500).json({ message: 'Failed to update account balance' });
+        }
+
+        // Verify the balance was actually updated by fetching the account
+        const [updatedAccounts] = await db.query('SELECT balance FROM Accounts WHERE account_id = ?', [account_id]);
+        const actualBalance = parseFloat(updatedAccounts[0]?.balance || 0);
+        const expectedBalance = parseFloat(newBalance);
+        console.log('Account balance after update:', { 
+            account_id, 
+            actualBalance, 
+            expectedBalance,
+            difference: Math.abs(actualBalance - expectedBalance)
+        });
+        
+        // Allow for small floating point differences (0.01)
+        if (updatedAccounts.length === 0 || Math.abs(actualBalance - expectedBalance) > 0.01) {
+            console.error('Balance update verification failed:', { 
+                account_id, 
+                expected: expectedBalance, 
+                actual: actualBalance,
+                difference: Math.abs(actualBalance - expectedBalance)
+            });
+            return res.status(500).json({ message: 'Balance update verification failed' });
+        }
 
         const [newTransaction] = await db.query(
             'INSERT INTO Transactions (account_id, type, amount, description, category_id, payment_method_id) VALUES (?, ?, ?, ?, ?, ?)',
@@ -83,6 +153,54 @@ const createTransaction = async (req, res) => {
         );
         
         const [createdTransaction] = await db.query('SELECT * FROM Transactions WHERE transaction_id = ?', [newTransaction.insertId]);
+
+        // Check for budget exceeded notification (only for expense transactions)
+        if (type === 'expense' && category_id) {
+            try {
+                const now = new Date();
+                const currentMonth = now.getMonth() + 1;
+                const currentYear = now.getFullYear();
+
+                // Check if there's a budget for this category in the current month/year
+                const [budgets] = await db.query(
+                    'SELECT B.*, ' +
+                    'COALESCE( (' +
+                        'SELECT SUM(T.amount) FROM Transactions T ' +
+                        'JOIN Accounts A ON T.account_id = A.account_id ' +
+                        'WHERE T.category_id = B.category_id ' +
+                        'AND A.profile_id = B.profile_id ' +
+                        'AND T.type = "expense" ' +
+                        'AND YEAR(T.time_stamp) = B.year ' +
+                        'AND MONTH(T.time_stamp) = B.month' +
+                    '), 0.00) AS spent_amount ' +
+                    'FROM Budgets B ' +
+                    'WHERE B.profile_id = ? AND B.category_id = ? AND B.month = ? AND B.year = ?',
+                    [account.profile_id, category_id, currentMonth, currentYear]
+                );
+
+                if (budgets.length > 0) {
+                    const budget = budgets[0];
+                    const spentAmount = parseFloat(budget.spent_amount || 0);
+                    const budgetLimit = parseFloat(budget.budget);
+
+                    // If spent amount exceeds or equals budget limit, create notification
+                    if (spentAmount >= budgetLimit) {
+                        const [categories] = await db.query('SELECT name FROM Categories WHERE category_id = ?', [category_id]);
+                        const categoryName = categories.length > 0 ? categories[0].name : 'Unknown Category';
+                        
+                        const message = `Budget exceeded for ${categoryName}: Spent ₹${spentAmount.toFixed(2)} out of ₹${budgetLimit.toFixed(2)} budget for ${new Date(currentYear, currentMonth - 1).toLocaleString('default', { month: 'long', year: 'numeric' })}.`;
+                        
+                        await db.query(
+                            'INSERT INTO Notifications (profile_id, message) VALUES (?, ?)',
+                            [account.profile_id, message]
+                        );
+                    }
+                }
+            } catch (budgetError) {
+                // Don't fail the transaction if budget check fails
+                console.error('Error checking budget for notification:', budgetError);
+            }
+        }
 
         res.status(201).json(createdTransaction[0]);
     } catch (error) {
@@ -117,7 +235,18 @@ const deleteTransaction = async (req, res) => {
             reversedBalance = parseFloat(account.balance) + parseFloat(transaction.amount);
         }
 
-        await db.query('UPDATE Accounts SET balance = ? WHERE account_id = ?', [reversedBalance, transaction.account_id]);
+        // Validate reversedBalance
+        if (isNaN(reversedBalance) || !isFinite(reversedBalance)) {
+            return res.status(400).json({ message: 'Invalid balance calculation' });
+        }
+
+        // Update account balance
+        const [updateResult] = await db.query('UPDATE Accounts SET balance = ? WHERE account_id = ?', [reversedBalance, transaction.account_id]);
+        
+        // Verify the update succeeded
+        if (updateResult.affectedRows === 0) {
+            return res.status(500).json({ message: 'Failed to update account balance' });
+        }
 
         await db.query('DELETE FROM Transactions WHERE transaction_id = ?', [transactionId]);
         
@@ -130,6 +259,7 @@ const deleteTransaction = async (req, res) => {
 
 module.exports = {
     getAllUserTransactions,
+    getTransactionsByProfile,
     getTransactionsByAccount,
     createTransaction,
     deleteTransaction,
