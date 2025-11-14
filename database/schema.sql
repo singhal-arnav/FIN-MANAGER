@@ -1,7 +1,6 @@
-
-DROP DATABASE IF EXISTS PFMS;
-CREATE DATABASE PFMS;
-USE PFMS;
+DROP DATABASE IF EXISTS Finance_Manager;
+CREATE DATABASE Finance_Manager;
+USE Finance_Manager;
 
 -- =============================================
 -- SECTION 1: CORE TABLES (User Login & Profile Management)
