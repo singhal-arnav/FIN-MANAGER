@@ -21,9 +21,25 @@ const pool = mysql.createPool({
     connectTimeout: 10000 // 10 seconds
 });
 
+// ADD THIS: Wrap the pool to make queries case-insensitive
+const promisePool = pool.promise();
+const originalQuery = promisePool.query.bind(promisePool);
+
+promisePool.query = function(sql, values) {
+    if (typeof sql === 'string') {
+        // Convert table names to lowercase in SQL queries
+        sql = sql.replace(/FROM\s+`?(\w+)`?/gi, (match, table) => `FROM \`${table.toLowerCase()}\``);
+        sql = sql.replace(/JOIN\s+`?(\w+)`?/gi, (match, table) => `JOIN \`${table.toLowerCase()}\``);
+        sql = sql.replace(/INTO\s+`?(\w+)`?/gi, (match, table) => `INTO \`${table.toLowerCase()}\``);
+        sql = sql.replace(/UPDATE\s+`?(\w+)`?/gi, (match, table) => `UPDATE \`${table.toLowerCase()}\``);
+        sql = sql.replace(/TABLE\s+`?(\w+)`?/gi, (match, table) => `TABLE \`${table.toLowerCase()}\``);
+    }
+    return originalQuery(sql, values);
+};
+
 // Test the connection
-pool.promise().query('SELECT 1')
+promisePool.query('SELECT 1')
     .then(() => console.log('✅ Database connection successful'))
     .catch(err => console.error('❌ Database connection failed:', err.message));
 
-module.exports = pool.promise();
+module.exports = promisePool;
