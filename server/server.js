@@ -4,21 +4,27 @@ require('dotenv').config();
 
 const app = express();
 
-// CORS configuration - add your Vercel frontend URL
 const allowedOrigins = [
   'http://localhost:3000', // local development
-  'http://localhost:5173', // Vite local development
   process.env.FRONTEND_URL, // production frontend URL from env variable
 ].filter(Boolean); // Remove undefined values
 
+console.log('=== CORS DEBUG ===');
+console.log('Allowed origins:', allowedOrigins);
+console.log('FRONTEND_URL env var:', process.env.FRONTEND_URL);
+
 app.use(cors({
   origin: function(origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
+    // ADD THIS DEBUG LOGGING
+    console.log('Request origin:', origin);
+    
     if (!origin) return callback(null, true);
     
     if (allowedOrigins.includes(origin)) {
+      console.log('✓ Origin allowed');
       callback(null, true);
     } else {
+      console.log('✗ Origin REJECTED');
       callback(new Error('Not allowed by CORS'));
     }
   },
