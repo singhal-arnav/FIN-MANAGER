@@ -89,6 +89,14 @@ function InvoicesPage({ selectedProfile }) {
             return;
         }
 
+        const issueDateObj = new Date(issueDate);
+        const dueDateObj = new Date(dueDate);
+        
+        if (dueDateObj < issueDateObj) {
+            setFormError('Due date cannot be earlier than issue date.');
+            return;
+        }
+
         try {
             const token = localStorage.getItem('token');
             const authHeaders = { headers: { 'Authorization': `Bearer ${token}` } };
