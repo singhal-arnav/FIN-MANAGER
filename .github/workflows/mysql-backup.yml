@@ -2,7 +2,7 @@ name: Daily MySQL Backup
 
 on:
   schedule:
-    - cron: "*/5 * * * *"   # every 5 minutes for testing
+    - cron: "30 20 * * *"  # Runs 2 AM IST (20:30 UTC)
   workflow_dispatch:
 
 jobs:
