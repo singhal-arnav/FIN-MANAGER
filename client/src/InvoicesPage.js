@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
-const API_URL = 'http://localhost:5000/api';
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
 function InvoicesPage({ selectedProfile }) {
     const [clients, setClients] = useState([]);
@@ -86,6 +86,14 @@ function InvoicesPage({ selectedProfile }) {
 
         if (!selectedProfile?.profile_id || !selectedClient || !invoiceNumber || !amount || !issueDate || !dueDate) {
             setFormError('All fields except status are required.');
+            return;
+        }
+
+        const issueDateObj = new Date(issueDate);
+        const dueDateObj = new Date(dueDate);
+        
+        if (dueDateObj < issueDateObj) {
+            setFormError('Due date cannot be earlier than issue date.');
             return;
         }
 

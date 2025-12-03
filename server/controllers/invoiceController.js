@@ -61,6 +61,15 @@ const createInvoice = async (req, res) => {
             return res.status(403).json({ message: 'Invoices can only be created for business profiles' });
         }
 
+        const issueDate = new Date(issue_date);
+        const dueDate = new Date(due_date);
+        
+        if (dueDate < issueDate) {
+            return res.status(400).json({ 
+                message: 'Due date cannot be earlier than issue date' 
+            });
+        }
+
         // Verify the client belongs to this profile
         const [clients] = await db.query('SELECT * FROM Clients WHERE client_id = ? AND profile_id = ?', [client_id, profile_id]);
         if (clients.length === 0) {
@@ -105,6 +114,19 @@ const updateInvoice = async (req, res) => {
             return res.status(400).json({ message: 'Invalid status value' });
         }
 
+        // Determine the final issue_date and due_date (use new values if provided, otherwise keep old)
+        const finalIssueDate = issue_date || invoice.issue_date;
+        const finalDueDate = due_date || invoice.due_date;
+        
+        const issueDateObj = new Date(finalIssueDate);
+        const dueDateObj = new Date(finalDueDate);
+        
+        if (dueDateObj < issueDateObj) {
+            return res.status(400).json({ 
+                message: 'Due date cannot be earlier than issue date' 
+            });
+        }
+        
         await db.query(
             'UPDATE Invoices SET invoice_number = ?, amount = ?, issue_date = ?, due_date = ?, status = ? WHERE invoice_id = ?',
             [

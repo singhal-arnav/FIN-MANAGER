@@ -169,7 +169,8 @@ CREATE TABLE Invoices (
     due_date        DATE            NOT NULL,
     status          ENUM('draft', 'sent', 'paid', 'overdue', 'void') NOT NULL DEFAULT 'draft',
     FOREIGN KEY (client_id) REFERENCES Clients(client_id) ON DELETE CASCADE,
-    FOREIGN KEY (profile_id) REFERENCES Profiles(profile_id) ON DELETE CASCADE
+    FOREIGN KEY (profile_id) REFERENCES Profiles(profile_id) ON DELETE CASCADE,
+    CHECK (due_date >= issue_date)
 );
 
 -- =============================================

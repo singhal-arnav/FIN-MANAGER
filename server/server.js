@@ -4,7 +4,34 @@ require('dotenv').config();
 
 const app = express();
 
-app.use(cors());
+const allowedOrigins = [
+  'http://localhost:3000', // local development
+  process.env.FRONTEND_URL, // production frontend URL from env variable
+].filter(Boolean); // Remove undefined values
+
+console.log('=== CORS DEBUG ===');
+console.log('Allowed origins:', allowedOrigins);
+console.log('FRONTEND_URL env var:', process.env.FRONTEND_URL);
+
+app.use(cors({
+  origin: function(origin, callback) {
+    // ADD THIS DEBUG LOGGING
+    console.log('Request origin:', origin);
+    
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.includes(origin)) {
+      console.log('✓ Origin allowed');
+      callback(null, true);
+    } else {
+      console.log('✗ Origin REJECTED');
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+}));
+
 app.use(express.json());
 
 app.use('/api/users', require('./routes/users'));
